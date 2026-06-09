@@ -424,7 +424,7 @@ function formatComment(c, index, total) {
     }
   }
   out.push(`- 指摘 / 修正指示:`);
-  out.push(`  ${c.body.replace(/\n/g, "\n  ")}`);
+  out.push(`  ${String(c.body ?? "").replace(/\n/g, "\n  ")}`);
   return out.join("\n");
 }
 

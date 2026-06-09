@@ -45,13 +45,24 @@ init((ctx) => {
     useAdapter(a);
   }
 
+  // Re-mount the current view from scratch. Useful if a link click inside the
+  // preview iframe navigated away from the reviewed file — this restores it.
+  async function reload() {
+    frameWrap.innerHTML = "";
+    const a = factories[current]();
+    await a.mount();
+    active = a;
+    useAdapter(a);
+  }
+
   function syncButtons() {
     btnPreview?.classList.toggle("active", current === "preview");
     btnSource?.classList.toggle("active", current === "source");
   }
   function syncToolbar() {
-    // selection sub-modes only make sense in HTML preview
-    const showModes = current === "preview" && previewKind === "html";
+    // element/text/off selection modes apply to any rendered preview
+    // (HTML or Markdown); the source view uses line comments instead.
+    const showModes = current === "preview";
     toolbar.classList.toggle("source-mode", !showModes);
   }
 
@@ -65,6 +76,7 @@ init((ctx) => {
       } else {
         toggle.hidden = true;
       }
+      document.getElementById("reload-view")?.addEventListener("click", () => reload());
       const start = state.meta.defaultView === "source" || !hasPreview ? "source" : "preview";
       frameWrap.innerHTML = "";
       active = factories[start]();

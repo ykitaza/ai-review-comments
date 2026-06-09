@@ -3,3 +3,6 @@ dist/
 *.vsix
 .DS_Store
 *.log
+
+# personal draft, not part of the repo
+docs/qiita-article-draft.md

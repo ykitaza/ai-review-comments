@@ -25,7 +25,8 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
   const panel = vscode.window.createWebviewPanel(
     "aiReviewComments",
     `Review: ${fileName}`,
-    vscode.ViewColumn.Beside,
+    // open as a tab in the active editor group (not a split pane)
+    vscode.ViewColumn.Active,
     {
       enableScripts: true,
       retainContextWhenHidden: true,
@@ -112,6 +113,7 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
         <button id="mode-element" class="mode-btn active">⬚ Element</button>
         <button id="mode-text" class="mode-btn">✎ Text</button>
         <button id="mode-off" class="mode-btn">✋ Off</button>
+        <button id="reload-view" class="icon-btn" title="Reload the preview (e.g. after following a link)">⟳</button>
         <button id="open-settings" class="icon-btn" title="Settings">⚙</button>
         <button id="toggle-panel" class="icon-btn" title="Toggle panel">⟩</button>
       </div>

@@ -721,3 +721,19 @@ button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .comment.resolved { opacity: 0.55; }
 .comment.resolved .comment-body { text-decoration: line-through; }
+.comment-reply {
+  font-size: 10.5px;
+  color: var(--accent-2);
+  background: rgba(79,140,255,0.12);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+.comment-note {
+  font-size: 12px;
+  color: var(--ok);
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--ok);
+  text-decoration: none !important;
+}
+.comment.resolved .comment-note { text-decoration: none; }

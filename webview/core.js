@@ -224,6 +224,7 @@ export function renderComments() {
       <span class="comment-num">${i + 1}</span>
       <span class="comment-kind">${kindLabel(c)}</span>
       ${c.author === "ai" ? '<span class="comment-author-ai" title="AIが追加したコメント">AI</span>' : ""}
+      ${c.replyTo ? `<span class="comment-reply" title="#${c.replyTo} への返信">↪ #${c.replyTo}</span>` : ""}
       ${c.resolved ? '<span class="comment-resolved" title="対応済み">✓ 対応済み</span>' : ""}
     `;
     const copyOne = document.createElement("button");
@@ -274,6 +275,14 @@ export function renderComments() {
     body.className = "comment-body";
     body.textContent = c.body;
     li.appendChild(body);
+
+    // resolution note left by whoever resolved it (typically the AI)
+    if (c.resolved && c.resolutionNote) {
+      const note = document.createElement("div");
+      note.className = "comment-note";
+      note.textContent = `↳ 対応メモ: ${c.resolutionNote}`;
+      li.appendChild(note);
+    }
 
     li.addEventListener("click", () => {
       setActive(c.id);

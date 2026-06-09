@@ -89,9 +89,33 @@ function parseFlags(args) {
     else if (a === "--end") flags.end = Number(args[++i]);
     else if (a === "--body") flags.body = args[++i];
     else if (a === "--author") flags.author = args[++i];
+    else if (a === "--note") flags.note = args[++i];
+    else if (a === "--reply-to") flags.replyTo = Number(args[++i]);
     else rest.push(a);
   }
   return { flags, rest };
+}
+
+// Has the file drifted since the comment was made? Compares the recorded
+// snippet against the current content (line comments: exact lines at the
+// recorded position; element comments: substring match with injected
+// data-line attributes stripped). undefined = can't tell.
+function isStale(key, c) {
+  if (!c.snippet) return undefined;
+  let content;
+  try {
+    content = readFileSync(resolve(root, key), "utf8").replace(/\r\n?/g, "\n");
+  } catch {
+    return undefined;
+  }
+  if (c.kind === "lines") {
+    const lines = content.split("\n");
+    const a = c.range ? c.range[0] : c.line;
+    const b = c.range ? c.range[1] : c.line;
+    return lines.slice(a - 1, b).join("\n") !== c.snippet;
+  }
+  const plain = c.snippet.replace(/\s(?:data-line|data-md-line)="\d+"/g, "");
+  return !content.includes(plain);
 }
 
 const [cmd, ...argv] = process.argv.slice(2);
@@ -112,7 +136,9 @@ switch (cmd) {
       for (const c of list) {
         const mark = c.resolved ? "✓" : "・";
         const who = c.author === "ai" ? " [AI]" : "";
-        console.log(`  ${mark} #${c.id} ${locator(c)}${who}: ${String(c.body ?? "").split("\n")[0]}`);
+        const reply = c.replyTo ? ` ↪#${c.replyTo}` : "";
+        console.log(`  ${mark} #${c.id} ${locator(c)}${who}${reply}: ${String(c.body ?? "").split("\n")[0]}`);
+        if (c.resolved && c.resolutionNote) console.log(`      └ 対応メモ: ${c.resolutionNote}`);
       }
     }
     break;
@@ -125,6 +151,22 @@ switch (cmd) {
     } else {
       console.log(JSON.stringify(store, null, 2));
     }
+    break;
+  }
+
+  // The AI agent's work list: every unresolved comment in the workspace, with a
+  // computed `stale` flag (file changed since the comment was made → don't
+  // trust the recorded line numbers blindly; locate by snippet/intent instead).
+  case "pending": {
+    const out = [];
+    const keys = rest[0] ? [keyFor(rest[0])] : Object.keys(store.files);
+    for (const key of keys) {
+      const open = commentsFor(store, key)
+        .filter((c) => !c.resolved)
+        .map((c) => ({ ...c, stale: isStale(key, c) }));
+      if (open.length) out.push({ file: key, comments: open });
+    }
+    console.log(JSON.stringify(out, null, 2));
     break;
   }
 
@@ -178,9 +220,10 @@ switch (cmd) {
       author: flags.author === "ai" ? "ai" : "human",
       anchor: { line: flags.line },
     };
+    if (flags.replyTo) comment.replyTo = flags.replyTo;
     store.files[key] = { comments: [...list, comment] };
     writeStore(store);
-    console.log(`追加しました: ${key} #${id} ${comment.selector}`);
+    console.log(`追加しました: ${key} #${id} ${comment.selector}${flags.replyTo ? ` (↪ #${flags.replyTo} への返信)` : ""}`);
     break;
   }
 
@@ -192,7 +235,11 @@ switch (cmd) {
     const list = commentsFor(store, key);
     if (!list.some((c) => c.id === id)) die(`コメント #${id} が ${key} に見つかりません`);
     if (cmd === "resolve") {
-      store.files[key] = { comments: list.map((c) => (c.id === id ? { ...c, resolved: true } : c)) };
+      store.files[key] = {
+        comments: list.map((c) =>
+          c.id === id ? { ...c, resolved: true, ...(flags.note ? { resolutionNote: flags.note } : {}) } : c
+        ),
+      };
     } else {
       const next = list.filter((c) => c.id !== id);
       if (next.length) store.files[key] = { comments: next };
@@ -215,11 +262,12 @@ switch (cmd) {
   default:
     console.log(`ai-review — AI Review Comments のコメントストアを読み書きするCLI
 
-  ai-review list   [file]                 コメント一覧
-  ai-review json   [file]                 JSONで出力（エージェント向け）
-  ai-review prompt <file>                 未対応コメントをAIプロンプト形式で出力
-  ai-review add    <file> --line N [--end M] --body "..." [--author ai]
-  ai-review resolve <file> <id>           対応済みにする
+  ai-review list    [file]                コメント一覧
+  ai-review json    [file]                JSONで出力（エージェント向け）
+  ai-review pending [file]                未対応コメントのみJSON（stale=ファイル変更で位置ズレの可能性）
+  ai-review prompt  <file>                未対応コメントをAIプロンプト形式で出力
+  ai-review add     <file> --line N [--end M] --body "..." [--author ai] [--reply-to ID]
+  ai-review resolve <file> <id> [--note "対応内容"]   対応済みにする
   ai-review remove  <file> <id>           削除
   ai-review clear   <file>                全削除
 

@@ -2,7 +2,7 @@
   "name": "ai-review-comments",
   "displayName": "AI Review Comments",
   "description": "Review any file (HTML, Markdown, JSON, YAML, XML, source) in a side panel, drop comments on the rendered view or raw lines, and copy an AI-ready revision prompt.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "ykitaza",
   "bin": {
     "ai-review": "./cli/ai-review.mjs"
@@ -45,10 +45,16 @@
         }
       ],
       "editor/title/context": [
-        { "command": "aiReviewComments.review", "group": "navigation@99" }
+        {
+          "command": "aiReviewComments.review",
+          "group": "navigation@99"
+        }
       ],
       "editor/context": [
-        { "command": "aiReviewComments.review", "group": "navigation@99" }
+        {
+          "command": "aiReviewComments.review",
+          "group": "navigation@99"
+        }
       ]
     },
     "configuration": {
@@ -56,7 +62,12 @@
       "properties": {
         "aiReviewComments.defaultTemplate": {
           "type": "string",
-          "enum": ["fix", "question", "review", "plain"],
+          "enum": [
+            "fix",
+            "question",
+            "review",
+            "plain"
+          ],
           "default": "fix",
           "description": "Default AI prompt template used when copying comments."
         }

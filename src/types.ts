@@ -33,6 +33,8 @@ export interface ReviewComment {
   // AI collaboration
   author?: "human" | "ai";
   resolved?: boolean;
+  resolutionNote?: string; // what was done when resolving (shown in the panel)
+  replyTo?: number; // id of the comment this one replies to
 }
 
 /** The workspace comment store (.ai-review/comments.json). */

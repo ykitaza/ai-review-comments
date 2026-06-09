@@ -26,12 +26,12 @@ npx -y github:ykitaza/ai-review-comments <command>
 
 ## 手順
 
-1. **コメントを確認する**
+1. **やることリストを取得する** — `pending` が最適（未対応コメントのみ、
+   全ファイル横断、JSON）:
 
    ```bash
-   ai-review list             # 全ファイルのコメント一覧
-   ai-review json <file>      # 機械可読なJSON（こちらを推奨）
-   ai-review prompt <file>    # 整形済みプロンプト（位置情報＋指摘）
+   ai-review pending          # 全ワークスペースの未対応コメント
+   ai-review pending <file>   # 特定ファイルのみ
    ```
 
    各コメントには位置情報が付いています:
@@ -40,27 +40,29 @@ npx -y github:ykitaza/ai-review-comments <command>
    - `mdLine` / `srcLine` — プレビューコメントの元ソース行
    - `path` — JSON/YAML のデータパス（例 `services.web.ports`）
    - `snippet` — コメント時点の該当箇所の内容
+   - **`stale`** — `true` ならコメント後にファイルが変わっており、**行番号を
+     鵜呑みにしてはいけない**。`snippet` と指摘の意図から現在の該当箇所を
+     探して適用すること。
 
 2. **修正を適用する** — 位置情報と `body`（指摘）に従って対象ファイルを編集する。
-   `snippet` はコメント時点の内容なので、ファイルが変わっていたら現状を確認して
-   意図に合う箇所へ適用する。
+   `stale: true` のコメントは必ず現状のファイルを読んで位置を再特定する。
 
-3. **対応済みにする** — 対応したコメントは resolve でマークする
-   （パネルでは ✓ 取り消し線になり、以後のプロンプトから除外される）:
+3. **対応済みにする** — 対応したら `--note` で**何をしたかを添えて** resolve する
+   （パネルに ✓ と対応メモが表示され、以後のプロンプトから除外される）:
 
    ```bash
-   ai-review resolve <file> <id>
+   ai-review resolve <file> <id> --note "ボタン文言を「30秒で無料登録」に変更"
    ```
 
-4. **AIからコメントを返す（任意）** — 質問や提案がある場合は、自分のコメントを
-   追加できる（パネルに AI バッジ付きで表示される）:
+4. **質問・提案を返す（任意）** — 指摘が曖昧なときは、元コメントに紐付けて
+   質問できる（パネルに AI バッジ + ↪ 返信マーカー付きで表示される）:
 
    ```bash
-   ai-review add <file> --line 42 --body "この関数は分割を推奨します" --author ai
+   ai-review add <file> --line 42 --body "Aの意味とBの意味どちらですか？" --author ai --reply-to 3
    ```
 
 ## 注意
 
-- コメントの `id` はファイルごとに独立。resolve/remove には `json` で確認した id を使う。
-- 人間のコメントを勝手に `remove` しない。対応したら `resolve` を使う。
+- コメントの `id` はファイルごとに独立。resolve/remove には `pending`/`json` で確認した id を使う。
+- 人間のコメントを勝手に `remove` しない。対応したら `resolve --note` を使う。
 - ストアの場所は CWD から `.ai-review/` または `.git/` を上方向に探索して決まる。

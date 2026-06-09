@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.1]
+
+### Added (AI-requested features — what an agent wants when working the loop)
+- `ai-review pending [file]` — every unresolved comment across the workspace in
+  one JSON call, with a computed **`stale`** flag (file changed since the
+  comment → don't trust recorded line numbers; re-locate by snippet/intent).
+- `ai-review resolve --note "..."` — record *what was done*; the note shows in
+  the panel under the resolved comment.
+- `ai-review add --reply-to <id>` — reply to a specific comment (panel shows an
+  ↪ reply marker), e.g. for the AI to ask clarifying questions.
+
 ## [0.2.0]
 
 ### Added

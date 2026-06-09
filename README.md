@@ -6,7 +6,7 @@ A VS Code extension to **review any file in a side panel, drop comments on the
 rendered view or the raw lines, and copy an AI-ready revision prompt** you can
 paste straight into Claude Code, Copilot, ChatGPT, etc.
 
-![review panel](media/screenshot.png)
+![comment, copy the prompt, paste into AI](media/flow.gif)
 
 ## The idea
 
@@ -32,7 +32,17 @@ flowchart LR
 
 ## How it works
 
-![usage flow](media/flow.gif)
+Comment on the rendered page → **Copy** → the clipboard holds a structured
+prompt (file path, CSS selector, source line, the HTML/snippet, your note) →
+paste it into your AI assistant and it knows exactly what to change. (See the
+animation above.)
+
+Toggle between the **rendered preview** and the **raw source** at any time —
+comments made in either view stay in sync and point at the same lines.
+
+![preview and source toggle](media/toggle.gif)
+
+### Steps
 
 1. Right-click a file → **AI Review: Open Review Panel** (opens beside the editor).
 2. Toggle **👁 Preview / `<>` Source** (preview is available for HTML/Markdown).

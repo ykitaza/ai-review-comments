@@ -11,4 +11,4 @@ tsconfig.json
 .vscodeignore
 **/*.map
 scripts/**
-media/flow.gif
+media/**

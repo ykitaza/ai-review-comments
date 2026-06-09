@@ -6,7 +6,7 @@
 コメントを付けて、AI 向けの修正プロンプトをコピー**できる VS Code 拡張です。
 コピーした内容は Claude Code / Copilot / ChatGPT などにそのまま貼り付けられます。
 
-![review panel](media/screenshot.png)
+![コメント→コピー→AIに貼り付け](media/flow.gif)
 
 ## コンセプト
 
@@ -32,7 +32,14 @@ flowchart LR
 
 ## 使い方
 
-![操作の流れ](media/flow.gif)
+レンダリング結果にコメント → **Copy** → クリップボードには構造化された
+プロンプト（ファイルパス・CSSセレクタ・ソース行・該当HTML・指摘）が入り →
+AI に貼り付ければ、どこを直すか正確に伝わります（上のアニメーション参照）。
+
+プレビューとソースはいつでも切替可能。どちらで付けたコメントも同期し、
+同じ行を指します。
+
+![プレビューとソースの切替](media/toggle.gif)
 
 1. ファイルを右クリック → **AI Review: Open Review Panel**（エディタの横に開く）
 2. **👁 Preview / `<>` Source** を切り替え（プレビューは HTML/Markdown のみ）

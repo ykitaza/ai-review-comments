@@ -129,10 +129,10 @@ const FLOW = `
     await sleep(500);
     const save = document.getElementById("composer-save");
     moveTo(save); await sleep(400); save.click(); await sleep(700);
-    // 2) second comment
-    const feat = d.querySelector("#features .feature:nth-of-type(3) p");
+    // 2) second comment — use the centre feature so its pin stays on-screen
+    const feat = d.querySelector("#features .feature:nth-of-type(2) h3");
     moveToFrameEl(feat); hoverFrameEl(feat); await sleep(1000); feat.click(); await sleep(400);
-    await typeInto(document.getElementById("composer-input"), "対応フォーマットの例を一行足して");
+    await typeInto(document.getElementById("composer-input"), "この見出しをもっと具体的にしたい");
     await sleep(400);
     moveTo(document.getElementById("composer-save")); await sleep(300);
     document.getElementById("composer-save").click(); await sleep(700);

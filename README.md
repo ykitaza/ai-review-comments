@@ -1,94 +1,87 @@
 # AI Review Comments
 
-**English** · [日本語](README.ja.md)
+任意のファイルをサイドパネルでレビューし、**レンダリング結果または生の行に
+コメントを付けて、AI 向けの修正プロンプトをコピー**できる VS Code 拡張です。
+コピーした内容は Claude Code / Copilot / ChatGPT などにそのまま貼り付けられます。
 
-A VS Code extension to **review any file in a side panel, drop comments on the
-rendered view or the raw lines, and copy an AI-ready revision prompt** you can
-paste straight into Claude Code, Copilot, ChatGPT, etc.
+![コメント→コピー→AIに貼り付け](media/flow.gif)
 
-![comment, copy the prompt, paste into AI](media/flow.gif)
+## レビューパネルの開き方
 
-## Opening the review panel
+エクスプローラーで**ファイルを右クリック**（エディタのタブ／エディタ上でも可）し、
+**「AI Review: Open Review Panel」** を選びます。エディタの横に開き、左に
+ファイル・右にコメントが並びます。コマンドパレット（`⌘/Ctrl+Shift+P` →
+*AI Review: Open Review Panel*）からも実行できます。
 
-**Right-click a file** in the Explorer (or the editor tab / editor area) and
-choose **“AI Review: Open Review Panel.”** It opens beside your editor — the
-file on the left, your comments on the right. You can also run it from the
-Command Palette (`⌘/Ctrl+Shift+P` → *AI Review: Open Review Panel*).
+![エディタの横に開いたレビューパネル](media/vscode-overview.png)
 
-![the review panel open next to the editor](media/vscode-overview.png)
+## コンセプト
 
-## The idea
+AI に HTML ページや Markdown ドキュメントを生成させたとき——レビューは
+**レンダリング結果（見た目）** を見て行いたいのに、修正させるには AI が
+**ソース** を編集する必要があります。このギャップを埋めます。
 
-You ask an AI to generate an HTML page or a Markdown doc. To review it you want
-to look at the **rendered result** — but to get it fixed, the AI needs to edit
-the **source**. This extension closes that gap:
-
-1. **Open the AI-generated file in a preview** (HTML renders; Markdown renders,
-   including `mermaid` diagrams).
-2. **Comment right on what you see** — click an element or a line and type your note.
-3. **Copy** — your notes become a prompt that points the AI at the exact spot
-   (CSS selector, source line, JSON/YAML data path) in a format ready to paste.
+1. **AI が生成したファイルをプレビューで開く**（HTML はそのまま、Markdown は
+   `mermaid` 図を含めてレンダリング）。
+2. **見ているものに直接コメント** — 要素や行をクリックして指摘を書く。
+3. **コピー** — コメントが、対象を正確に指す（CSS セレクタ／ソース行／
+   JSON・YAML のデータパス）プロンプトに整形され、貼り付け可能な形になります。
 
 ```mermaid
 flowchart LR
-  A[AI-generated file] --> B[Open review panel]
-  B --> C{Preview or Source}
-  C -->|click element / line| D[Comment + locator]
-  D --> E[Format as AI prompt]
-  E --> F[Copy to clipboard]
+  A[AIが生成したファイル] --> B[レビューパネルで開く]
+  B --> C{プレビュー or ソース}
+  C -->|要素・行をクリック| D[コメント + 位置情報]
+  D --> E[AI向けプロンプトに整形]
+  E --> F[クリップボードへコピー]
   F --> A
 ```
 
-## How it works
+## 使い方
 
-Comment on the rendered page → **Copy** → the clipboard holds a structured
-prompt (file path, CSS selector, source line, the HTML/snippet, your note) →
-paste it into your AI assistant and it knows exactly what to change. (See the
-animation above.)
+レンダリング結果にコメント → **Copy** → クリップボードには構造化された
+プロンプト（ファイルパス・CSSセレクタ・ソース行・該当HTML・指摘）が入り →
+AI に貼り付ければ、どこを直すか正確に伝わります（上のアニメーション参照）。
 
-Toggle between the **rendered preview** and the **raw source** at any time —
-comments made in either view stay in sync and point at the same lines.
+プレビューとソースはいつでも切替可能。どちらで付けたコメントも同期し、
+同じ行を指します。
 
-![preview and source toggle](media/toggle.gif)
+![プレビューとソースの切替](media/toggle.gif)
 
-### Steps
+1. ファイルを右クリック → **AI Review: Open Review Panel**（エディタの横に開く）
+2. **👁 Preview / `<>` Source** を切り替え（プレビューは HTML/Markdown のみ）
+3. コメントを付ける:
+   - **プレビュー**: 要素をクリック、または **✎ Text** で文章をドラッグ選択
+   - **ソース**: 行をクリック、または範囲をドラッグ → その場の入力欄に記入
+     （⌘/Ctrl+Enter で確定）
+4. **📋 Copy AI prompt** を押して AI に貼り付け
 
-1. Right-click a file → **AI Review: Open Review Panel** (opens beside the editor).
-2. Toggle **👁 Preview / `<>` Source** (preview is available for HTML/Markdown).
-3. Add comments:
-   - **Preview:** click an element, or pick **✎ Text** and drag-select prose.
-   - **Source:** click a line, or drag across a range; type in the inline box
-     (⌘/Ctrl+Enter to save).
-4. Press **📋 Copy AI prompt** and paste it to your AI assistant.
+## 機能
 
-## Features
+- **2 つのビューを自由に切替**（Obsidian 風）: レンダリング ⇄ 生ソース
+- **コメントがソースに紐付く** — レンダリングされた見出しへのコメントは元の
+  Markdown 行を、HTML 要素へのコメントはソース行と安定した CSS セレクタを記録
+- **JSON/YAML のデータパス** — 行コメントが構造パス（例 `services.web.ports`）を取得
+- **`mermaid` 図** を Markdown プレビューで描画
+- **プロンプトテンプレート** — 修正 / 質問 / レビュー / プレーン、または
+  `{{file}}` `{{count}}` `{{comments}}` で自作
+- **ファイル単位で永続化**（ワークスペース）、**コピー**でクリップボードへ
+- **リサイズ / 折りたたみ**対応・レスポンシブ
 
-- **Two views, toggle freely** (Obsidian-style): rendered preview ⇄ raw source.
-- **Comments map back to the source** — a note on a rendered heading records the
-  original Markdown line; a note on an HTML element records its source line and
-  a stable CSS selector.
-- **Data paths for JSON/YAML** — commenting a line captures its structural path
-  (e.g. `services.web.ports`).
-- **`mermaid` diagrams** render inside Markdown preview.
-- **Prompt templates** — *Fix / Question / Review / Plain*, or write your own
-  with `{{file}}`, `{{count}}`, `{{comments}}` placeholders.
-- **Persistence** per file (workspace state); **copy** to clipboard.
-- **Resizable / collapsible**, responsive panel.
+### 対応フォーマット
 
-### Supported files
+| ファイル | プレビュー | ソース |
+|------|-----------|--------|
+| `.html` `.htm` | ライブレンダリング・要素/テキストコメント | 生 HTML + 行番号 |
+| `.md` `.markdown` | レンダリング（`mermaid` 含む）・要素/テキストコメント | 生 Markdown + 行番号 |
+| `.json` `.yaml` `.xml` `.svg` `.txt` `.csv`・各種ソース | —（ソースのみ） | 行 + JSON/YAML データパス |
 
-| File | Preview | Source |
-|------|---------|--------|
-| `.html` `.htm` | Live render, element/text comments | Raw HTML + line numbers |
-| `.md` `.markdown` | Rendered (incl. `mermaid`), element/text comments | Raw Markdown + line numbers |
-| `.json` `.yaml` `.xml` `.svg` `.txt` `.csv`, source files, … | — (source only) | Lines + JSON/YAML data paths |
+> Markdown プレビューは `mermaid` を CDN から読み込みます（要ネット接続）。
+> 読み込めない場合は図のソースがテキストのまま表示されます。
 
-> Markdown preview loads `mermaid` from a CDN (needs network); without it the
-> diagram source stays visible as text.
+## インストール
 
-## Install
-
-### From a packaged VSIX (today)
+### パッケージ済み VSIX から（現在）
 
 ```bash
 git clone https://github.com/ykitaza/ai-review-comments.git
@@ -98,31 +91,31 @@ npm run package          # → ai-review-comments-<version>.vsix
 code --install-extension ai-review-comments-*.vsix
 ```
 
-Or in VS Code: **Extensions panel → ··· → Install from VSIX…**
+または VS Code で **拡張機能パネル → ··· → VSIX からインストール…**
 
-### From the Marketplace
+### Marketplace から
 
-_Not published yet._ Once published: search **“AI Review Comments”**, or
-`code --install-extension ykitaza.ai-review-comments`.
+_未公開です。_ 公開後は **「AI Review Comments」** で検索、または
+`code --install-extension ykitaza.ai-review-comments`。
 
-## Configuration
+## 設定
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `aiReviewComments.defaultTemplate` | `fix` | Default prompt template (`fix` / `question` / `review` / `plain`). |
+| 設定 | 既定 | 説明 |
+|------|------|------|
+| `aiReviewComments.defaultTemplate` | `fix` | 既定のプロンプトテンプレート（`fix` / `question` / `review` / `plain`） |
 
-## Development
+## 開発
 
 ```bash
 npm install
-npm run watch        # rebuild dist/ on change
+npm run watch        # 変更を監視して dist/ を再ビルド
 npm run typecheck    # tsc --noEmit
-npm run package      # build a .vsix
+npm run package      # .vsix を作成
 ```
 
-Press **F5** in VS Code to launch an Extension Development Host. See
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
+VS Code で **F5** を押すと拡張機能の開発ホストが起動します。設計は
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照。
 
-## License
+## ライセンス
 
 [MIT](LICENSE)

@@ -30,8 +30,7 @@
     "commands": [
       {
         "command": "aiReviewComments.review",
-        "title": "AI Review: Open Review Panel",
-        "category": "AI Review"
+        "title": "AI Review: Open Review Panel"
       }
     ],
     "menus": {

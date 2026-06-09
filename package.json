@@ -2,8 +2,11 @@
   "name": "ai-review-comments",
   "displayName": "AI Review Comments",
   "description": "Review any file (HTML, Markdown, JSON, YAML, XML, source) in a side panel, drop comments on the rendered view or raw lines, and copy an AI-ready revision prompt.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "ykitaza",
+  "bin": {
+    "ai-review": "./cli/ai-review.mjs"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"

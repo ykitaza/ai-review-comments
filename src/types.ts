@@ -30,6 +30,15 @@ export interface ReviewComment {
   // preview→source mapping
   mdLine?: number;
   srcLine?: number;
+  // AI collaboration
+  author?: "human" | "ai";
+  resolved?: boolean;
+}
+
+/** The workspace comment store (.ai-review/comments.json). */
+export interface CommentStore {
+  version: 1;
+  files: Record<string, { comments: ReviewComment[] }>;
 }
 
 export interface PersistedComments {

@@ -702,3 +702,22 @@ button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
   max-height: 320px;
   overflow: auto;
 }
+
+/* ---------------- AI collaboration badges ---------------- */
+.comment-author-ai {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #d97757, #c15f3c);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.comment-resolved {
+  font-size: 10.5px;
+  color: var(--ok);
+  background: rgba(62, 207, 142, 0.12);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+.comment.resolved { opacity: 0.55; }
+.comment.resolved .comment-body { text-decoration: line-through; }

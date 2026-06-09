@@ -108,6 +108,16 @@ export async function init(makeAdapter) {
 
   // flush any pending state when the view goes away
   window.addEventListener("pagehide", () => save());
+
+  // external updates: the CLI / an AI agent changed the comment store —
+  // replace our list and re-render (the host relays these as a DOM event).
+  window.addEventListener("ai-review:comments", (e) => {
+    const list = Array.isArray(e.detail) ? e.detail : [];
+    state.comments = list;
+    state.nextId = list.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
+    renderComments();
+    adapter?.relocate?.();
+  });
 }
 
 // Swap the active adapter (used when toggling preview/source). The new adapter
@@ -205,7 +215,7 @@ export function renderComments() {
   els.comments.innerHTML = "";
   state.comments.forEach((c, i) => {
     const li = document.createElement("li");
-    li.className = "comment";
+    li.className = "comment" + (c.resolved ? " resolved" : "");
     li.dataset.id = c.id;
 
     const head = document.createElement("div");
@@ -213,6 +223,8 @@ export function renderComments() {
     head.innerHTML = `
       <span class="comment-num">${i + 1}</span>
       <span class="comment-kind">${kindLabel(c)}</span>
+      ${c.author === "ai" ? '<span class="comment-author-ai" title="AIが追加したコメント">AI</span>' : ""}
+      ${c.resolved ? '<span class="comment-resolved" title="対応済み">✓ 対応済み</span>' : ""}
     `;
     const copyOne = document.createElement("button");
     copyOne.className = "comment-copy";
@@ -222,6 +234,14 @@ export function renderComments() {
       e.stopPropagation();
       copyText(buildPrompt([c]));
       flashToast(copyOne);
+    });
+    const edit = document.createElement("button");
+    edit.className = "comment-copy";
+    edit.textContent = "✎";
+    edit.title = "編集";
+    edit.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openEditComposer(c);
     });
     const del = document.createElement("button");
     del.className = "comment-del";
@@ -235,6 +255,7 @@ export function renderComments() {
       adapter?.relocate?.();
     });
     head.appendChild(copyOne);
+    head.appendChild(edit);
     head.appendChild(del);
     li.appendChild(head);
 
@@ -433,8 +454,10 @@ export function formatComments(list) {
 }
 
 // Build an AI prompt for a subset (all, or one) by filling the active template.
+// Resolved comments are excluded — they're already handled.
 export function buildPrompt(subset) {
-  const list = subset && subset.length ? subset : state.comments;
+  let list = subset && subset.length ? subset : state.comments;
+  list = list.filter((c) => !c.resolved);
   const fullPath = state.meta.path || state.meta.file || "the file";
   const body = currentTemplateBody();
   return body

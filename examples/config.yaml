@@ -1,3 +1,6 @@
+# Sample config for trying source-mode review.
+# Open this file in the review panel, click a line (or drag a range), and the
+# comment will capture its data path (e.g. services.web.ports).
 version: "3.8"
 
 services:
@@ -8,7 +11,6 @@ services:
       - "443:443"
     environment:
       - NODE_ENV=production
-    restart: always
 
   api:
     build: ./api
@@ -16,18 +18,8 @@ services:
       - "3000:3000"
     depends_on:
       - db
-    environment:
-      DATABASE_URL: postgres://user:pass@db:5432/app
-      LOG_LEVEL: info
 
   db:
     image: postgres:16
-    volumes:
-      - pgdata:/var/lib/postgresql/data
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
       POSTGRES_DB: app
-
-volumes:
-  pgdata:

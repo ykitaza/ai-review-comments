@@ -34,6 +34,12 @@ npm run package     # must produce a .vsix without errors
   mapping in `src/render/index.ts`, and the matching renderer in `src/render/`.
 - Update `CHANGELOG.md`.
 
+## Docs media
+
+`media/screenshot.png` and `media/flow.gif` are generated from a scripted,
+auto-playing harness (`scripts/make-demo-harness.mjs`) captured with headless
+Chrome and assembled with `ffmpeg`. Regenerate when the UI changes notably.
+
 ## Commit messages
 
 Describe the change and, for non-trivial work, how you verified it.

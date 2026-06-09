@@ -1,0 +1,77 @@
+{
+  "name": "ai-review-comments",
+  "displayName": "AI Review Comments",
+  "description": "Review any file (HTML, Markdown, JSON, YAML, XML, source) in a side panel, drop comments on the rendered view or raw lines, and copy an AI-ready revision prompt.",
+  "version": "0.1.0",
+  "publisher": "ykitaza",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "review",
+    "ai",
+    "prompt",
+    "comment",
+    "markdown",
+    "preview"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ykitaza/ai-review-comments.git"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiReviewComments.review",
+        "title": "AI Review: Open Review Panel",
+        "category": "AI Review"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "aiReviewComments.review",
+          "group": "navigation@99",
+          "when": "!explorerResourceIsFolder"
+        }
+      ],
+      "editor/title/context": [
+        { "command": "aiReviewComments.review", "group": "navigation@99" }
+      ],
+      "editor/context": [
+        { "command": "aiReviewComments.review", "group": "navigation@99" }
+      ]
+    },
+    "configuration": {
+      "title": "AI Review Comments",
+      "properties": {
+        "aiReviewComments.defaultTemplate": {
+          "type": "string",
+          "enum": ["fix", "question", "review", "plain"],
+          "default": "fix",
+          "description": "Default AI prompt template used when copying comments."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "node esbuild.mjs --production && npx --yes @vscode/vsce package --no-dependencies",
+    "vscode:prepublish": "node esbuild.mjs --production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}

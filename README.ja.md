@@ -8,6 +8,15 @@
 
 ![コメント→コピー→AIに貼り付け](media/flow.gif)
 
+## レビューパネルの開き方
+
+エクスプローラーで**ファイルを右クリック**（エディタのタブ／エディタ上でも可）し、
+**「AI Review: Open Review Panel」** を選びます。エディタの横に開き、左に
+ファイル・右にコメントが並びます。コマンドパレット（`⌘/Ctrl+Shift+P` →
+*AI Review: Open Review Panel*）からも実行できます。
+
+![エディタの横に開いたレビューパネル](media/vscode-overview.png)
+
 ## コンセプト
 
 AI に HTML ページや Markdown ドキュメントを生成させたとき——レビューは

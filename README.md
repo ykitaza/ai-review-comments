@@ -8,6 +8,15 @@ paste straight into Claude Code, Copilot, ChatGPT, etc.
 
 ![comment, copy the prompt, paste into AI](media/flow.gif)
 
+## Opening the review panel
+
+**Right-click a file** in the Explorer (or the editor tab / editor area) and
+choose **“AI Review: Open Review Panel.”** It opens beside your editor — the
+file on the left, your comments on the right. You can also run it from the
+Command Palette (`⌘/Ctrl+Shift+P` → *AI Review: Open Review Panel*).
+
+![the review panel open next to the editor](media/vscode-overview.png)
+
 ## The idea
 
 You ask an AI to generate an HTML page or a Markdown doc. To review it you want

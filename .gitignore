@@ -6,3 +6,4 @@ dist/
 
 # personal draft, not part of the repo
 docs/qiita-article-draft.md
+.ai-review/

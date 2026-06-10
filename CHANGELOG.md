@@ -3,6 +3,26 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0]
+
+### Added
+- **Browser mode** (`ai-review open <file>` / `ai-review <file>`): a zero-build
+  local server that opens the same review UI in the default browser — no VS Code
+  needed, friendly for non-engineers. Comments persist to the same
+  `.ai-review/comments.json` store; external changes (CLI / AI agent) stream to
+  the page live over SSE. Tab close shuts the server down (deferred, reload-safe).
+
+### Changed
+- Render implementations moved to plain-JS `shared/render.mjs` (single source of
+  truth for the extension host and the build-free CLI server); `src/render` is
+  now a typed re-export.
+- Store helpers extracted to `shared/store.mjs` (CLI + server).
+
+### Fixed
+- CLI root discovery now walks up from the target file's directory, so
+  `ai-review add /abs/path/file --line N …` works from any cwd (and avoids a
+  macOS `/tmp` symlink key mismatch).
+
 ## [0.2.1]
 
 ### Added (AI-requested features — what an agent wants when working the loop)

@@ -12,45 +12,15 @@
 //   ai-review resolve <file> <id>           対応済みにする
 //   ai-review remove  <file> <id>           コメントを削除
 //   ai-review clear   <file>                ファイルのコメントを全削除
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { resolve, relative, dirname, join, sep } from "node:path";
-
-const STORE_REL = ".ai-review/comments.json";
-
-// Root = nearest ancestor with .ai-review/ or .git/ (so the CLI works from
-// subdirectories); falls back to the current directory.
-function findRoot(start = process.cwd()) {
-  let dir = resolve(start);
-  while (true) {
-    if (existsSync(join(dir, ".ai-review")) || existsSync(join(dir, ".git"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) return resolve(start);
-    dir = parent;
-  }
-}
-
-const root = findRoot();
-const storePath = join(root, STORE_REL);
-
-function readStore() {
-  try {
-    const data = JSON.parse(readFileSync(storePath, "utf8"));
-    if (data && data.version === 1 && data.files) return data;
-  } catch {
-    /* missing or invalid */
-  }
-  return { version: 1, files: {} };
-}
-
-function writeStore(store) {
-  mkdirSync(dirname(storePath), { recursive: true });
-  writeFileSync(storePath, JSON.stringify(store, null, 2) + "\n");
-}
-
-/** Normalize a user-supplied path to the store key (root-relative, /-separated). */
-function keyFor(file) {
-  return relative(root, resolve(file)).split(sep).join("/");
-}
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import {
+  findRoot,
+  storePathFor,
+  readStoreSync,
+  writeStoreSync,
+  keyFor as keyForIn,
+} from "../shared/store.mjs";
 
 function commentsFor(store, key) {
   return store.files[key]?.comments ?? [];
@@ -91,6 +61,9 @@ function parseFlags(args) {
     else if (a === "--author") flags.author = args[++i];
     else if (a === "--note") flags.note = args[++i];
     else if (a === "--reply-to") flags.replyTo = Number(args[++i]);
+    else if (a === "--port" || a === "-p") flags.port = Number(args[++i]);
+    else if (a === "--no-open") flags.noOpen = true;
+    else if (a === "--keep-alive") flags.keepAlive = true;
     else rest.push(a);
   }
   return { flags, rest };
@@ -120,6 +93,30 @@ function isStale(key, c) {
 
 const [cmd, ...argv] = process.argv.slice(2);
 const { flags, rest } = parseFlags(argv);
+
+// `ai-review open <file>` — or just `ai-review <file>` — starts the browser
+// review server (same UI as the VS Code extension, no build needed).
+const bareFile = cmd && cmd !== "open" && !["list", "json", "pending", "prompt", "add", "resolve", "remove", "clear"].includes(cmd) && existsSync(resolve(cmd)) ? cmd : null;
+
+// Root discovery: file-taking commands walk up from the FILE's directory (so
+// the CLI works from any cwd); commands without a file walk up from the cwd.
+const fileRef = bareFile ? resolve(bareFile) : rest[0] && existsSync(resolve(rest[0])) ? resolve(rest[0]) : null;
+const root = fileRef ? findRoot(dirname(fileRef)) : findRoot();
+const storePath = storePathFor(root);
+const readStore = () => readStoreSync(root);
+const writeStore = (store) => writeStoreSync(root, store);
+const keyFor = (file) => keyForIn(root, file);
+
+if (cmd === "open" || bareFile) {
+  const file = bareFile ?? rest[0];
+  if (!file) die("usage: ai-review open <file>");
+  const { serve } = await import("./serve.mjs");
+  await serve({ file, port: flags.port ?? 4900, open: !flags.noOpen, keepAlive: !!flags.keepAlive });
+} else {
+  runCommand();
+}
+
+function runCommand() {
 const store = readStore();
 
 switch (cmd) {
@@ -262,6 +259,9 @@ switch (cmd) {
   default:
     console.log(`ai-review — AI Review Comments のコメントストアを読み書きするCLI
 
+  ai-review open <file> [--port N] [--no-open] [--keep-alive]
+                                          ブラウザでレビュー（VS Code不要・ビルド不要）
+                                          ※ ai-review <file> だけでも開けます
   ai-review list    [file]                コメント一覧
   ai-review json    [file]                JSONで出力（エージェント向け）
   ai-review pending [file]                未対応コメントのみJSON（stale=ファイル変更で位置ズレの可能性）
@@ -272,6 +272,7 @@ switch (cmd) {
   ai-review clear   <file>                全削除
 
 store: ${storePath}`);
+}
 }
 
 function die(msg) {

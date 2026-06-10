@@ -6,14 +6,34 @@
 
 ![コメント→コピー→AIに貼り付け](media/flow.gif)
 
-## レビューパネルの開き方
+## 2つの使い方: VS Code拡張 / ブラウザ（npx）
+
+同じレビューUIを **VS Code の中**でも **ブラウザ**でも使えます。コメントはどちらも
+ワークスペースの `.ai-review/comments.json` に保存され、共有されます。
+
+### VS Code で開く
 
 エクスプローラーで**ファイルを右クリック**（エディタのタブ／エディタ上でも可）し、
-**「AI Review: Open Review Panel」** を選びます。エディタの横に開き、左に
-ファイル・右にコメントが並びます。コマンドパレット（`⌘/Ctrl+Shift+P` →
-*AI Review: Open Review Panel*）からも実行できます。
+**「AI Review: Open Review Panel」** を選びます。コマンドパレット
+（`⌘/Ctrl+Shift+P` → *AI Review: Open Review Panel*）からも実行できます。
 
 ![エディタの横に開いたレビューパネル](media/vscode-overview.png)
+
+### ブラウザで開く（VS Code不要・ビルド不要）
+
+エンジニア以外のメンバーとレビューする場合や、依存を増やしたくない場合は
+`npx` 一発でブラウザが開きます:
+
+```bash
+npx -y github:ykitaza/ai-review-comments open ./docs/design.md
+# ファイルパスだけでもOK:
+npx -y github:ykitaza/ai-review-comments ./docs/design.md
+```
+
+ローカルサーバが立ち上がりブラウザが開きます（`--port N` / `--no-open` /
+`--keep-alive` オプションあり。タブを閉じるとサーバも終了します）。
+コメントは VS Code 版と同じストアに入るので、**ブラウザでコメント → AI が CLI で
+読んで対応 → ブラウザに即時反映**のループがそのまま動きます。
 
 ## コンセプト
 

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "files": {
+    "docs/ARCHITECTURE.md": {
+      "comments": [
+        {
+          "id": 1,
+          "kind": "element",
+          "selector": "ol:nth-of-type(1) > li",
+          "snippet": "<li data-md-line=\"69\">User clicks in a view → the adapter builds a <em>target</em> descriptor</li>",
+          "label": "li — “User clicks in a view → the adapter bui…”",
+          "mdLine": 69,
+          "anchor": {
+            "fx": 0.5,
+            "fy": 0.5
+          },
+          "body": "どういういみ"
+        }
+      ]
+    },
+    "examples/landing.html": {
+      "comments": [
+        {
+          "id": 1,
+          "kind": "element",
+          "selector": "header.hero > h1",
+          "snippet": "<h1 data-line=\"33\">AI Review Comments</h1>",
+          "label": "h1 — “AI Review Comments”",
+          "srcLine": 33,
+          "anchor": {
+            "fx": 0.5,
+            "fy": 0.5
+          },
+          "body": "タイトルを変更"
+        },
+        {
+          "id": 2,
+          "kind": "element",
+          "selector": "header.hero > a.btn",
+          "snippet": "<a data-line=\"35\" href=\"#\" class=\"btn\">無料で始める</a>",
+          "label": "a — “無料で始める”",
+          "srcLine": 35,
+          "anchor": {
+            "fx": 0.5,
+            "fy": 0.5
+          },
+          "body": "んzん"
+        }
+      ]
+    }
+  }
+}

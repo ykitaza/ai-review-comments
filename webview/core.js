@@ -13,6 +13,7 @@ export const els = {
   clear: document.getElementById("clear"),
   toast: document.getElementById("copied-toast"),
   fileLabel: document.getElementById("file-label"),
+  version: document.getElementById("extension-version"),
   composer: document.getElementById("composer"),
   composerTarget: document.getElementById("composer-target"),
   composerInput: document.getElementById("composer-input"),
@@ -24,7 +25,6 @@ export const state = {
   comments: [],
   nextId: 1,
   meta: { file: "", path: "", dir: "", previewKind: "none", defaultView: "source", lang: "text" },
-  storageKey: null,
 };
 
 let adapter = null; // set by init()
@@ -32,27 +32,25 @@ let pending = null; // selection awaiting a comment
 let editingId = null; // comment being edited
 
 // ---------------------------------------------------------------------------
-// persistence (localStorage, keyed by absolute path)
-function load() {
-  if (!state.storageKey) return;
+// persistence: comments are owned by the host (VS Code extension or browser
+// server). The webview keeps only an in-memory copy for rendering.
+async function loadComments() {
   try {
-    const raw = localStorage.getItem(state.storageKey);
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    state.comments = Array.isArray(data.comments) ? data.comments : [];
-    state.nextId = state.comments.reduce((m, c) => Math.max(m, c.id), 0) + 1;
+    const comments = await window.aiReviewHost?.loadComments?.();
+    if (Array.isArray(comments)) replaceComments(comments);
   } catch {
-    state.comments = [];
+    replaceComments([]);
   }
 }
 export function save() {
-  if (!state.storageKey) return;
-  try {
-    localStorage.setItem(
-      state.storageKey,
-      JSON.stringify({ path: state.meta.path, comments: state.comments })
-    );
-  } catch {}
+  const payload = { path: state.meta.path, comments: state.comments };
+  if (window.aiReviewHost?.saveComments) {
+    window.aiReviewHost.saveComments(payload);
+  }
+}
+function replaceComments(comments) {
+  state.comments = comments;
+  state.nextId = comments.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,17 +83,12 @@ export function deleteComment(id) {
 export async function init(makeAdapter) {
   const meta = await (await fetch("/__meta")).json();
   state.meta = meta;
-  state.storageKey = "review:" + meta.path;
   els.fileLabel.textContent = meta.file;
   els.fileLabel.title = meta.path;
+  setVersionBadge();
   document.title = `Review — ${meta.file}`;
 
-  if (meta.clean) {
-    localStorage.removeItem(state.storageKey);
-    state.comments = [];
-  } else {
-    load();
-  }
+  await loadComments();
   loadTemplate(); // restore the user's chosen prompt template
 
   // makeAdapter may return an adapter, or a "controller" that manages multiple
@@ -106,18 +99,32 @@ export async function init(makeAdapter) {
   renderComments();
   adapter.relocate?.();
 
-  // flush any pending state when the view goes away
-  window.addEventListener("pagehide", () => save());
-
   // external updates: the CLI / an AI agent changed the comment store —
   // replace our list and re-render (the host relays these as a DOM event).
   window.addEventListener("ai-review:comments", (e) => {
     const list = Array.isArray(e.detail) ? e.detail : [];
-    state.comments = list;
-    state.nextId = list.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
+    replaceComments(list);
     renderComments();
     adapter?.relocate?.();
   });
+}
+
+export function applyBootData(boot) {
+  state.meta = boot.meta;
+  els.fileLabel.textContent = boot.meta.file;
+  els.fileLabel.title = boot.meta.path;
+  document.title = `Review — ${boot.meta.file}`;
+  const comments = Array.isArray(boot.saved?.comments) ? boot.saved.comments : [];
+  replaceComments(comments);
+  setVersionBadge(boot);
+}
+
+function setVersionBadge(boot = window.__AI_REVIEW_BOOT__) {
+  if (!els.version) return;
+  const version = boot?.extensionVersion || "dev";
+  const loadedAt = boot?.loadedAt ? new Date(boot.loadedAt).toLocaleTimeString() : "";
+  els.version.textContent = `v${version}${loadedAt ? ` / ${loadedAt}` : ""}`;
+  els.version.title = `AI Review Comments ${version}${loadedAt ? ` loaded at ${loadedAt}` : ""}`;
 }
 
 // Swap the active adapter (used when toggling preview/source). The new adapter
@@ -312,7 +319,6 @@ export function setActive(id) {
 // clear all
 els.clear.addEventListener("click", () => {
   if (!state.comments.length) return;
-  if (!confirm("コメントをすべて削除しますか？")) return;
   state.comments = [];
   save();
   renderComments();

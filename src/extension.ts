@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { spawn } from "node:child_process";
 import type { BootData, ReviewMeta, WebviewMessage, PersistedComments } from "./types.js";
 import { previewKindFor, langFor, renderPreview } from "./render/index.js";
 import {
@@ -21,16 +22,65 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage("レビューするファイルを選択してください。");
         return;
       }
-      await openReview(context, target);
+      await openReviewWithConfiguredTarget(context, target);
+    }),
+    vscode.commands.registerCommand("aiReviewComments.reviewInBrowser", async (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (!target) {
+        vscode.window.showWarningMessage("レビューするファイルを選択してください。");
+        return;
+      }
+      await openReviewInBrowser(context, target);
     })
   );
 }
 
 export function deactivate() {}
 
+async function openReviewWithConfiguredTarget(context: vscode.ExtensionContext, fileUri: vscode.Uri) {
+  const configured = vscode.workspace
+    .getConfiguration("aiReviewComments")
+    .get<"vscode" | "browser" | "ask">("openTarget", "vscode");
+
+  let target = configured;
+  if (configured === "ask") {
+    const picked = await vscode.window.showQuickPick(
+      [
+        { label: "VS Code内で開く", value: "vscode" as const },
+        { label: "ブラウザで開く", value: "browser" as const },
+      ],
+      { placeHolder: "AI Review Comments をどこで開きますか？" }
+    );
+    if (!picked) return;
+    target = picked.value;
+  }
+
+  if (target === "browser") {
+    await openReviewInBrowser(context, fileUri);
+  } else {
+    await openReview(context, fileUri);
+  }
+}
+
+async function openReviewInBrowser(context: vscode.ExtensionContext, fileUri: vscode.Uri) {
+  const cliPath = path.join(context.extensionPath, "cli", "ai-review.mjs");
+  const cwd = workspaceRootFor(fileUri)?.fsPath ?? path.dirname(fileUri.fsPath);
+  const child = spawn(process.execPath, [cliPath, "open", fileUri.fsPath], {
+    cwd,
+    detached: true,
+    stdio: "ignore",
+  });
+  child.on("error", (error) => {
+    vscode.window.showErrorMessage(`ブラウザ表示を起動できませんでした: ${error.message}`);
+  });
+  child.unref();
+  vscode.window.showInformationMessage("AI Review Comments をブラウザで開きます。");
+}
+
 async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri) {
   const fsPath = fileUri.fsPath;
   const fileName = path.basename(fsPath);
+  const extensionVersion = String(context.extension.packageJSON.version ?? "dev");
 
   const panel = vscode.window.createWebviewPanel(
     "aiReviewComments",
@@ -44,52 +94,51 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
     }
   );
 
-  let source = "";
-  try {
-    source = Buffer.from(await vscode.workspace.fs.readFile(fileUri)).toString("utf8");
-  } catch {
-    source = "";
-  }
-
-  const previewHtml = renderPreview(fsPath, source);
-  const previewKind = previewHtml ? previewKindFor(fsPath) : "none";
-
-  const meta: ReviewMeta = {
-    file: fileName,
-    path: fsPath,
-    dir: path.dirname(fsPath),
-    previewKind,
-    defaultView: previewKind === "none" ? "source" : "preview",
-    lang: langFor(fsPath),
-  };
-
   // Comments live in <workspace>/.ai-review/comments.json so AI agents and the
   // CLI can read/write them too. Outside a workspace, fall back to
   // workspaceState (no external sharing possible there).
   const root = workspaceRootFor(fileUri);
   const key = root ? storeKeyFor(root, fileUri) : null;
-  let saved: PersistedComments | null = null;
-  if (root && key) {
-    await migrateFromWorkspaceState(context, root, key, fsPath);
-    const comments = await readComments(root, key);
-    saved = comments.length ? { path: fsPath, comments } : null;
-  } else {
-    saved = context.workspaceState.get<PersistedComments | null>("review:" + fsPath, null);
-  }
+  const createBootData = async (): Promise<BootData> => {
+    const source = await readCurrentText(fileUri);
+    const previewHtml = renderPreview(fsPath, source);
+    const previewKind = previewHtml ? previewKindFor(fsPath) : "none";
 
-  const boot: BootData = { meta, source, saved, previewHtml };
-  panel.webview.html = buildHtml(context, panel.webview, boot);
+    const meta: ReviewMeta = {
+      file: fileName,
+      path: fsPath,
+      dir: path.dirname(fsPath),
+      previewKind,
+      defaultView: previewKind === "none" ? "source" : "preview",
+      lang: langFor(fsPath),
+    };
+
+    let saved: PersistedComments | null = null;
+    if (root && key) {
+      await migrateFromWorkspaceState(context, root, key, fsPath);
+      const comments = await readComments(root, key);
+      saved = comments.length ? { path: fsPath, comments } : null;
+    } else {
+      saved = context.workspaceState.get<PersistedComments | null>("review:" + fsPath, null);
+    }
+
+    return { meta, source, saved, previewHtml, extensionVersion, loadedAt: new Date().toISOString() };
+  };
+
+  panel.webview.html = buildHtml(context, panel.webview, await createBootData());
 
   // remember what we last wrote so the watcher can ignore our own writes
   let lastWritten = "";
 
   panel.webview.onDidReceiveMessage(async (msg: WebviewMessage) => {
     if (msg.type === "save") {
+      const comments = msg.payload.comments ?? [];
       if (root && key) {
-        lastWritten = await writeComments(root, key, msg.payload.comments ?? []);
+        lastWritten = await writeComments(root, key, comments);
       } else {
         await context.workspaceState.update("review:" + fsPath, msg.payload);
       }
+      panel.webview.postMessage({ type: "comments", comments });
     } else if (msg.type === "copy") {
       await vscode.env.clipboard.writeText(msg.text);
       vscode.window.showInformationMessage("AIプロンプトをコピーしました。");
@@ -99,6 +148,8 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       const pos = new vscode.Position(Math.max(0, msg.line - 1), 0);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+    } else if (msg.type === "reload") {
+      panel.webview.postMessage({ type: "reload-result", boot: await createBootData() });
     }
   });
 
@@ -115,6 +166,7 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       } catch {
         /* deleted → treat as empty */
       }
+
       if (raw === lastWritten) return; // our own write echoing back
       const comments = await readComments(root, key);
       panel.webview.postMessage({ type: "comments", comments });
@@ -123,6 +175,18 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
     watcher.onDidCreate(onStoreChange);
     watcher.onDidDelete(onStoreChange);
     panel.onDidDispose(() => watcher.dispose());
+  }
+}
+
+async function readCurrentText(fileUri: vscode.Uri): Promise<string> {
+  const openDocument = vscode.workspace.textDocuments.find(
+    (doc) => doc.uri.toString() === fileUri.toString()
+  );
+  if (openDocument) return openDocument.getText();
+  try {
+    return Buffer.from(await vscode.workspace.fs.readFile(fileUri)).toString("utf8");
+  } catch {
+    return "";
   }
 }
 
@@ -156,13 +220,14 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
     <main id="stage">
       <div id="toolbar">
         <span id="file-label">…</span>
+        <span id="extension-version" class="version-badge" title="AI Review Comments version">…</span>
         <div id="view-toggle" class="seg" hidden>
           <button id="view-preview" class="seg-btn" title="レンダリング結果を表示">👁 プレビュー</button>
           <button id="view-source" class="seg-btn" title="生のソースを行番号付きで表示">&lt;&gt; ソース</button>
         </div>
         <span class="spacer"></span>
-        <button id="mode-element" class="mode-btn active" title="要素をクリックしてコメント">⬚ 要素</button>
-        <button id="mode-text" class="mode-btn" title="テキストをドラッグ選択してコメント">✎ テキスト</button>
+        <button id="mode-element" class="mode-btn" title="要素をクリックしてコメント">⬚ 要素</button>
+        <button id="mode-text" class="mode-btn active" title="テキストをドラッグ選択してコメント">✎ テキスト</button>
         <button id="mode-off" class="mode-btn" title="選択を無効化してページを普通に操作">✋ 操作</button>
         <button id="reload-view" class="icon-btn" title="プレビューを再読み込み（リンクで遷移してしまったとき等）">⟳</button>
         <button id="open-settings" class="icon-btn" title="設定（プロンプトテンプレート）">⚙</button>
@@ -213,24 +278,9 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
   <script>
     // host bridge: the webview UI talks to the extension instead of an HTTP server
     const vscode = acquireVsCodeApi();
-    const BOOT = ${injected};
+    let BOOT = ${injected};
+    window.__AI_REVIEW_BOOT__ = BOOT;
     if (BOOT.previewHtml) window.__PREVIEW_HTML__ = BOOT.previewHtml;
-
-    const _ls = {};
-    if (BOOT.saved) _ls["review:" + BOOT.meta.path] = JSON.stringify(BOOT.saved);
-    Object.defineProperty(window, "localStorage", {
-      configurable: true,
-      value: {
-        getItem: (k) => (k in _ls ? _ls[k] : null),
-        setItem: (k, v) => {
-          _ls[k] = v;
-          if (k === "review:" + BOOT.meta.path) {
-            try { vscode.postMessage({ type: "save", payload: JSON.parse(v) }); } catch {}
-          }
-        },
-        removeItem: (k) => { delete _ls[k]; },
-      },
-    });
 
     const _rf = window.fetch ? window.fetch.bind(window) : null;
     window.fetch = (url, opts) => {
@@ -242,14 +292,23 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
 
     if (!navigator.clipboard) navigator.clipboard = {};
     navigator.clipboard.writeText = (t) => { vscode.postMessage({ type: "copy", text: t }); return Promise.resolve(); };
+    window.aiReviewHost = {
+      loadComments: () => Promise.resolve(BOOT.saved?.comments || []),
+      saveComments: (payload) => vscode.postMessage({ type: "save", payload }),
+      reload: () => vscode.postMessage({ type: "reload" }),
+    };
 
     // host → webview: external comment updates (CLI / AI agent edited the
     // store file). Relayed to the UI as a DOM event the core engine listens to.
     window.addEventListener("message", (e) => {
       const m = e.data;
       if (m && m.type === "comments" && Array.isArray(m.comments)) {
-        _ls["review:" + BOOT.meta.path] = JSON.stringify({ path: BOOT.meta.path, comments: m.comments });
         window.dispatchEvent(new CustomEvent("ai-review:comments", { detail: m.comments }));
+      } else if (m && m.type === "reload-result" && m.boot) {
+        BOOT = m.boot;
+        window.__AI_REVIEW_BOOT__ = BOOT;
+        window.__PREVIEW_HTML__ = BOOT.previewHtml || "";
+        window.dispatchEvent(new CustomEvent("ai-review:reload", { detail: BOOT }));
       }
     });
   </script>

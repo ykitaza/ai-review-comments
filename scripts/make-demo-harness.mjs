@@ -68,7 +68,7 @@ const EXTRA_CSS = `
 const SHELL = `
 <div id="app"><main id="stage"><div id="toolbar"><span id="file-label">…</span>
 <div id="view-toggle" class="seg" hidden><button id="view-preview" class="seg-btn">👁 Preview</button><button id="view-source" class="seg-btn">&lt;&gt; Source</button></div>
-<span class="spacer"></span><button id="mode-element" class="mode-btn active">⬚ Element</button><button id="mode-text" class="mode-btn">✎ Text</button><button id="mode-off" class="mode-btn">✋ Off</button>
+<span class="spacer"></span><button id="mode-element" class="mode-btn">⬚ Element</button><button id="mode-text" class="mode-btn active">✎ Text</button><button id="mode-off" class="mode-btn">✋ Off</button>
 <button id="open-settings" class="icon-btn">⚙</button><button id="toggle-panel" class="icon-btn">⟩</button></div><div id="frame-wrap"></div></main>
 <div id="resizer"></div><aside id="panel"><header><h1>Comments</h1><span id="count" class="badge">0</span><span class="spacer"></span><button id="collapse-panel" class="icon-btn">⟩</button></header>
 <div id="hint" class="hint">Click an element / line or drag a range on the left to add a comment.</div><ul id="comments"></ul>

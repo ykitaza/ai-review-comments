@@ -3,6 +3,34 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.4]
+
+### Added
+- VS Code command/configuration to open reviews either inside VS Code or in the
+  default browser.
+
+## [0.3.3]
+
+### Changed
+- Preview mode now defaults to text selection instead of element selection.
+
+## [0.3.2]
+
+### Changed
+- Simplified comment state management: the UI now keeps comments only in memory,
+  while VS Code and browser hosts own persistence to `.ai-review/comments.json`.
+- Browser mode now uses explicit host APIs (`/__comments`, `/__save`, `/__boot`)
+  instead of a comment-specific localStorage shim.
+
+## [0.3.1]
+
+### Fixed
+- VS Code webview reload now requests fresh file content from the extension host.
+- Comment deletion now saves directly through the VS Code extension host instead
+  of relying only on the webview localStorage shim.
+- The review toolbar shows the running extension version so local VSIX updates
+  are visible during manual verification.
+
 ## [0.3.0]
 
 ### Added

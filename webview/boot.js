@@ -2,7 +2,7 @@
 // (rendered) and SOURCE (raw text) — and an Obsidian-style toggle between them.
 // Each view is its own adapter; the controller mounts them lazily and tells the
 // core engine which one is active.
-import { init, useAdapter } from "./core.js";
+import { applyBootData, init, useAdapter } from "./core.js";
 import { makeRenderAdapter } from "./render.js";
 import { makeSourceAdapter } from "./source.js";
 import { initSettings } from "./settings.js";
@@ -45,15 +45,31 @@ init((ctx) => {
     useAdapter(a);
   }
 
-  // Re-mount the current view from scratch. Useful if a link click inside the
-  // preview iframe navigated away from the reviewed file — this restores it.
+  // Ask the extension host to rebuild the webview with the latest file text.
+  // Re-mounting only inside this page would reuse the boot-time source.
   async function reload() {
+    if (window.aiReviewHost?.reload) {
+      window.aiReviewHost.reload();
+      return;
+    }
     frameWrap.innerHTML = "";
     const a = factories[current]();
     await a.mount();
     active = a;
     useAdapter(a);
   }
+
+  window.addEventListener("ai-review:reload", async (e) => {
+    applyBootData(e.detail);
+    frameWrap.innerHTML = "";
+    const view = current || state.meta.defaultView || "source";
+    const a = factories[view]();
+    await a.mount();
+    active = a;
+    syncButtons();
+    syncToolbar();
+    useAdapter(a);
+  });
 
   function syncButtons() {
     btnPreview?.classList.toggle("active", current === "preview");

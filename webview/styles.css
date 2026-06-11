@@ -126,6 +126,15 @@ html, body {
   max-width: 40%;
 }
 
+.version-badge {
+  color: var(--ok);
+  border: 1px solid rgba(62, 207, 142, 0.35);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .spacer { flex: 1; }
 
 /* segmented view toggle (preview / source) */

@@ -69,9 +69,8 @@ export function makeRenderAdapter({ state, startComposer }) {
       btn.addEventListener("click", () => setMode(m));
     }
     // drawio is a cross-origin iframe (view-only). Everything else defaults to
-    // element-select. PlantUML is same-origin inline SVG, so clicks work — but
-    // we locate via the clicked label's text + source line (IDs are unstable).
-    setMode(state.meta.previewKind === "drawio" ? "off" : "element");
+    // text-select so dragging text is the first interaction.
+    setMode(state.meta.previewKind === "drawio" ? "off" : "text");
   }
 
   function setMode(m) {

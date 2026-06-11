@@ -1,17 +1,14 @@
 # Ship only the built extension + docs. Source and config stay out of the vsix.
 src/**
-webview/**
 examples/**
 docs/**
 .github/**
 node_modules/**
-*.mjs
+esbuild.mjs
 tsconfig.json
 .gitignore
 .vscodeignore
 **/*.map
 scripts/**
 media/**
-cli/**
 skills/**
-shared/**

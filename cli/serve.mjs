@@ -14,7 +14,9 @@ import { renderPreview, previewKindFor, langFor } from "../shared/render.mjs";
 import { findRoot, storePathFor, readStoreSync, writeStoreSync, keyFor } from "../shared/store.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const WEBVIEW_DIR = resolve(__dirname, "..", "webview");
+const WEBVIEW_DIR = existsSync(resolve(__dirname, "..", "webview"))
+  ? resolve(__dirname, "..", "webview")
+  : resolve(__dirname, "..", "dist", "webview");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -64,6 +66,19 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
     defaultView: previewKind === "none" ? "source" : "preview",
     lang: langFor(targetPath),
   };
+  const buildBoot = async () => {
+    const source = await readFile(targetPath, "utf8").catch(() => "");
+    const previewHtml = renderPreview(targetPath, source);
+    const comments = readStoreSync(root).files[key]?.comments ?? [];
+    return {
+      meta,
+      source,
+      saved: comments.length ? { path: targetPath, comments } : null,
+      previewHtml,
+      extensionVersion: "browser",
+      loadedAt: new Date().toISOString(),
+    };
+  };
 
   // ensure the store dir exists so fs.watch has something to watch
   mkdirSync(join(root, ".ai-review"), { recursive: true });
@@ -98,13 +113,20 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
     if (url !== "/__bye") cancelShutdown();
 
     if (url === "/" || url === "/index.html") {
-      const saved = readStoreSync(root).files[key]?.comments ?? [];
       res.writeHead(200, { "content-type": MIME[".html"] });
-      return res.end(pageHtml(meta, saved));
+      return res.end(pageHtml(await buildBoot()));
+    }
+    if (url === "/__boot") {
+      res.writeHead(200, { "content-type": MIME[".json"] });
+      return res.end(JSON.stringify(await buildBoot()));
     }
     if (url === "/__meta") {
       res.writeHead(200, { "content-type": MIME[".json"] });
       return res.end(JSON.stringify(meta));
+    }
+    if (url === "/__comments") {
+      res.writeHead(200, { "content-type": MIME[".json"] });
+      return res.end(JSON.stringify(readStoreSync(root).files[key]?.comments ?? []));
     }
     if (url === "/__source") {
       const text = await readFile(targetPath, "utf8").catch(() => "");
@@ -212,14 +234,11 @@ function openBrowser(url) {
 }
 
 // The same DOM skeleton the extension's webview uses, plus a small browser
-// bridge: comment-key localStorage writes POST to /__save, SSE pushes external
-// changes, tab close notifies /__bye. Everything else (fetch /__meta,/__source,
-// clipboard) uses the real browser APIs against this server.
-function pageHtml(meta, savedComments) {
-  const bootPath = JSON.stringify(meta.path).replace(/</g, "\\u003c");
-  const saved = JSON.stringify(
-    savedComments.length ? { path: meta.path, comments: savedComments } : null
-  ).replace(/</g, "\\u003c");
+// bridge: comment mutations POST to /__save, SSE pushes external changes, tab
+// close notifies /__bye. Everything else uses the real browser APIs.
+function pageHtml(boot) {
+  const meta = boot.meta;
+  const injected = JSON.stringify(boot).replace(/</g, "\\u003c");
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -234,13 +253,14 @@ function pageHtml(meta, savedComments) {
     <main id="stage">
       <div id="toolbar">
         <span id="file-label">…</span>
+        <span id="extension-version" class="version-badge" title="AI Review Comments version">…</span>
         <div id="view-toggle" class="seg" hidden>
           <button id="view-preview" class="seg-btn" title="レンダリング結果を表示">👁 プレビュー</button>
           <button id="view-source" class="seg-btn" title="生のソースを行番号付きで表示">&lt;&gt; ソース</button>
         </div>
         <span class="spacer"></span>
-        <button id="mode-element" class="mode-btn active" title="要素をクリックしてコメント">⬚ 要素</button>
-        <button id="mode-text" class="mode-btn" title="テキストをドラッグ選択してコメント">✎ テキスト</button>
+        <button id="mode-element" class="mode-btn" title="要素をクリックしてコメント">⬚ 要素</button>
+        <button id="mode-text" class="mode-btn active" title="テキストをドラッグ選択してコメント">✎ テキスト</button>
         <button id="mode-off" class="mode-btn" title="選択を無効化してページを普通に操作">✋ 操作</button>
         <button id="reload-view" class="icon-btn" title="プレビューを再読み込み">⟳</button>
         <button id="open-settings" class="icon-btn" title="設定（プロンプトテンプレート）">⚙</button>
@@ -289,25 +309,19 @@ function pageHtml(meta, savedComments) {
   </div>
 
   <script>
-    // browser bridge: persist the comment key to the server's store; pass every
-    // other key (template/panel prefs) through to real localStorage.
-    const KEY = "review:" + ${bootPath};
-    const SAVED = ${saved};
-    const real = window.localStorage;
-    let cache = SAVED ? JSON.stringify(SAVED) : null;
-    Object.defineProperty(window, "localStorage", {
-      configurable: true,
-      value: {
-        getItem: (k) => (k === KEY ? cache : real.getItem(k)),
-        setItem: (k, v) => {
-          if (k === KEY) {
-            cache = v;
-            try { fetch("/__save", { method: "POST", body: v }); } catch {}
-          } else real.setItem(k, v);
-        },
-        removeItem: (k) => { if (k === KEY) cache = null; else real.removeItem(k); },
+    let BOOT = ${injected};
+    window.__AI_REVIEW_BOOT__ = BOOT;
+    if (BOOT.previewHtml) window.__PREVIEW_HTML__ = BOOT.previewHtml;
+    window.aiReviewHost = {
+      loadComments: () => fetch("/__comments").then((r) => r.json()),
+      saveComments: (payload) => fetch("/__save", { method: "POST", body: JSON.stringify(payload) }),
+      reload: async () => {
+        BOOT = await fetch("/__boot").then((r) => r.json());
+        window.__AI_REVIEW_BOOT__ = BOOT;
+        window.__PREVIEW_HTML__ = BOOT.previewHtml || "";
+        window.dispatchEvent(new CustomEvent("ai-review:reload", { detail: BOOT }));
       },
-    });
+    };
 
     // live updates from the CLI / AI agent
     try {
@@ -315,7 +329,6 @@ function pageHtml(meta, savedComments) {
       es.onmessage = (e) => {
         try {
           const comments = JSON.parse(e.data);
-          cache = JSON.stringify({ path: ${bootPath}, comments });
           window.dispatchEvent(new CustomEvent("ai-review:comments", { detail: comments }));
         } catch {}
       };

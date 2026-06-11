@@ -2,7 +2,7 @@
   "name": "ai-review-comments",
   "displayName": "AI Review Comments",
   "description": "Review any file (HTML, Markdown, JSON, YAML, XML, source) in a side panel, drop comments on the rendered view or raw lines, and copy an AI-ready revision prompt.",
-  "version": "0.3.0",
+  "version": "0.3.4",
   "publisher": "ykitaza",
   "bin": {
     "ai-review": "./cli/ai-review.mjs"
@@ -34,6 +34,10 @@
       {
         "command": "aiReviewComments.review",
         "title": "AI Review: Open Review Panel"
+      },
+      {
+        "command": "aiReviewComments.reviewInBrowser",
+        "title": "AI Review: Open in Browser"
       }
     ],
     "menus": {
@@ -42,18 +46,31 @@
           "command": "aiReviewComments.review",
           "group": "navigation@99",
           "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "aiReviewComments.reviewInBrowser",
+          "group": "navigation@100",
+          "when": "!explorerResourceIsFolder"
         }
       ],
       "editor/title/context": [
         {
           "command": "aiReviewComments.review",
           "group": "navigation@99"
+        },
+        {
+          "command": "aiReviewComments.reviewInBrowser",
+          "group": "navigation@100"
         }
       ],
       "editor/context": [
         {
           "command": "aiReviewComments.review",
           "group": "navigation@99"
+        },
+        {
+          "command": "aiReviewComments.reviewInBrowser",
+          "group": "navigation@100"
         }
       ]
     },
@@ -70,6 +87,16 @@
           ],
           "default": "fix",
           "description": "Default AI prompt template used when copying comments."
+        },
+        "aiReviewComments.openTarget": {
+          "type": "string",
+          "enum": [
+            "vscode",
+            "browser",
+            "ask"
+          ],
+          "default": "vscode",
+          "description": "Where to open reviews from the default AI Review command: VS Code tab, browser, or ask each time."
         }
       }
     }

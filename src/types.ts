@@ -54,10 +54,13 @@ export interface BootData {
   source: string;
   saved: PersistedComments | null;
   previewHtml: string | null;
+  extensionVersion: string;
+  loadedAt: string;
 }
 
 /** Messages sent from the webview to the extension host. */
 export type WebviewMessage =
   | { type: "save"; payload: PersistedComments }
   | { type: "copy"; text: string }
-  | { type: "reveal"; line: number };
+  | { type: "reveal"; line: number }
+  | { type: "reload" };

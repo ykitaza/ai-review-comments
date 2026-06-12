@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.5]
+
+### Added
+- Users can now resolve and reopen comments from the review UI.
+
+### Changed
+- Replies are grouped under their parent comment in a GitHub-style thread layout.
+- Resolving a parent comment resolves its reply thread together.
+
 ## [0.4.4]
 
 ### Changed

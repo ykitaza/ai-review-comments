@@ -77,6 +77,19 @@ export function deleteComment(id) {
   state.comments = state.comments.filter((x) => x.id !== id);
   save();
   renderComments();
+  adapter?.relocate?.();
+}
+
+export function setCommentResolved(id, resolved) {
+  const ids = threadIdsFor(id);
+  state.comments.forEach((c) => {
+    if (!ids.has(c.id)) return;
+    c.resolved = resolved;
+    if (!resolved) delete c.resolutionNote;
+  });
+  save();
+  renderComments();
+  adapter?.relocate?.();
 }
 
 // ---------------------------------------------------------------------------
@@ -226,93 +239,158 @@ export function renderComments() {
   els.hint.style.display = state.comments.length ? "none" : "block";
 
   els.comments.innerHTML = "";
-  state.comments.forEach((c, i) => {
-    const li = document.createElement("li");
-    li.className = "comment" + (c.resolved ? " resolved" : "") + (c.replyTo ? " reply" : "");
-    li.dataset.id = c.id;
-
-    const head = document.createElement("div");
-    head.className = "comment-head";
-    head.innerHTML = `
-      <span class="comment-num">${i + 1}</span>
-      <span class="comment-kind">${kindLabel(c)}</span>
-      ${c.author === "ai" ? '<span class="comment-author-ai" title="AIが追加したコメント">AI</span>' : ""}
-      ${c.replyTo ? `<span class="comment-reply" title="#${c.replyTo} への返信">↪ #${c.replyTo}</span>` : ""}
-      ${c.resolved ? '<span class="comment-resolved" title="対応済み">✓ 対応済み</span>' : ""}
-    `;
-    const copyOne = document.createElement("button");
-    copyOne.className = "comment-copy";
-    copyOne.textContent = "📋";
-    copyOne.title = "このコメントだけAIプロンプトとしてコピー";
-    copyOne.addEventListener("click", (e) => {
-      e.stopPropagation();
-      copyText(buildPrompt([c]));
-      flashToast(copyOne);
-    });
-    const edit = document.createElement("button");
-    edit.className = "comment-copy";
-    edit.textContent = "✎";
-    edit.title = "編集";
-    edit.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openEditComposer(c);
-    });
-    const reply = document.createElement("button");
-    reply.className = "comment-copy";
-    reply.textContent = "↩";
-    reply.title = "返信";
-    reply.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openReplyComposer(c);
-    });
-    const del = document.createElement("button");
-    del.className = "comment-del";
-    del.textContent = "🗑";
-    del.title = "削除";
-    del.addEventListener("click", (e) => {
-      e.stopPropagation();
-      state.comments = state.comments.filter((x) => x.id !== c.id);
-      save();
-      renderComments();
-      adapter?.relocate?.();
-    });
-    head.appendChild(copyOne);
-    head.appendChild(reply);
-    head.appendChild(edit);
-    head.appendChild(del);
-    li.appendChild(head);
-
-    if (c.quote) {
-      const q = document.createElement("div");
-      q.className = "comment-quote";
-      q.textContent = `“${truncate(c.quote, 160)}”`;
-      li.appendChild(q);
+  const { roots, replies } = threadedComments();
+  roots.forEach((c) => {
+    const li = commentItem(c);
+    const threadReplies = replies.get(c.id) || [];
+    if (threadReplies.length) {
+      const replyList = document.createElement("ul");
+      replyList.className = "comment-replies";
+      threadReplies.forEach((reply) => replyList.appendChild(commentItem(reply)));
+      li.appendChild(replyList);
     }
-    const sel = document.createElement("div");
-    sel.className = "comment-sel";
-    sel.textContent = c.selector;
-    li.appendChild(sel);
-
-    const body = document.createElement("div");
-    body.className = "comment-body";
-    body.textContent = c.body;
-    li.appendChild(body);
-
-    // resolution note left by whoever resolved it (typically the AI)
-    if (c.resolved && c.resolutionNote) {
-      const note = document.createElement("div");
-      note.className = "comment-note";
-      note.textContent = `↳ 対応メモ: ${c.resolutionNote}`;
-      li.appendChild(note);
-    }
-
-    li.addEventListener("click", () => {
-      setActive(c.id);
-      adapter?.reveal?.(c);
-    });
-    li.addEventListener("dblclick", () => openEditComposer(c));
     els.comments.appendChild(li);
   });
+}
+
+function commentItem(c) {
+  const i = state.comments.indexOf(c);
+  const li = document.createElement("li");
+  li.className = "comment" + (c.resolved ? " resolved" : "") + (c.replyTo ? " reply" : "");
+  li.dataset.id = c.id;
+
+  const head = document.createElement("div");
+  head.className = "comment-head";
+  head.innerHTML = `
+    <span class="comment-num">${i + 1}</span>
+    <span class="comment-kind">${kindLabel(c)}</span>
+    ${c.author === "ai" ? '<span class="comment-author-ai" title="AIが追加したコメント">AI</span>' : ""}
+    ${c.replyTo ? `<span class="comment-reply" title="#${c.replyTo} への返信">↪ #${c.replyTo}</span>` : ""}
+    ${c.resolved ? '<span class="comment-resolved" title="対応済み">✓ 対応済み</span>' : ""}
+  `;
+  const copyOne = document.createElement("button");
+  copyOne.className = "comment-copy";
+  copyOne.textContent = "📋";
+  copyOne.title = "このコメントだけAIプロンプトとしてコピー";
+  copyOne.addEventListener("click", (e) => {
+    e.stopPropagation();
+    copyText(buildPrompt([c]));
+    flashToast(copyOne);
+  });
+  const edit = document.createElement("button");
+  edit.className = "comment-copy";
+  edit.textContent = "✎";
+  edit.title = "編集";
+  edit.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openEditComposer(c);
+  });
+  const reply = document.createElement("button");
+  reply.className = "comment-copy";
+  reply.textContent = "↩";
+  reply.title = "返信";
+  reply.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openReplyComposer(c);
+  });
+  const resolve = document.createElement("button");
+  resolve.className = "comment-resolve";
+  resolve.textContent = c.resolved ? "再開" : (c.replyTo ? "解決" : "スレッド解決");
+  resolve.title = c.resolved ? "未対応に戻す" : "対応済みにする";
+  resolve.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setCommentResolved(c.id, !c.resolved);
+  });
+  const del = document.createElement("button");
+  del.className = "comment-del";
+  del.textContent = "🗑";
+  del.title = "削除";
+  del.addEventListener("click", (e) => {
+    e.stopPropagation();
+    deleteComment(c.id);
+  });
+  head.appendChild(copyOne);
+  head.appendChild(reply);
+  head.appendChild(resolve);
+  head.appendChild(edit);
+  head.appendChild(del);
+  li.appendChild(head);
+
+  if (c.quote) {
+    const q = document.createElement("div");
+    q.className = "comment-quote";
+    q.textContent = `“${truncate(c.quote, 160)}”`;
+    li.appendChild(q);
+  }
+  const sel = document.createElement("div");
+  sel.className = "comment-sel";
+  sel.textContent = c.selector;
+  li.appendChild(sel);
+
+  const body = document.createElement("div");
+  body.className = "comment-body";
+  body.textContent = c.body;
+  li.appendChild(body);
+
+  // resolution note left by whoever resolved it (typically the AI)
+  if (c.resolved && c.resolutionNote) {
+    const note = document.createElement("div");
+    note.className = "comment-note";
+    note.textContent = `↳ 対応メモ: ${c.resolutionNote}`;
+    li.appendChild(note);
+  }
+
+  li.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setActive(c.id);
+    adapter?.reveal?.(c);
+  });
+  li.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    openEditComposer(c);
+  });
+  return li;
+}
+
+function threadedComments() {
+  const byId = new Map(state.comments.map((c) => [c.id, c]));
+  const roots = [];
+  const replies = new Map();
+  state.comments.forEach((c) => {
+    const root = threadRootOf(c, byId);
+    if (root && root.id !== c.id) {
+      if (!replies.has(root.id)) replies.set(root.id, []);
+      replies.get(root.id).push(c);
+    } else {
+      roots.push(c);
+    }
+  });
+  return { roots, replies };
+}
+
+function threadRootOf(c, byId) {
+  let root = c;
+  const seen = new Set([c.id]);
+  while (root.replyTo && byId.has(root.replyTo) && !seen.has(root.replyTo)) {
+    root = byId.get(root.replyTo);
+    seen.add(root.id);
+  }
+  return root;
+}
+
+function threadIdsFor(id) {
+  const ids = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const c of state.comments) {
+      if (c.replyTo && ids.has(c.replyTo) && !ids.has(c.id)) {
+        ids.add(c.id);
+        changed = true;
+      }
+    }
+  }
+  return ids;
 }
 
 window.addEventListener("ai-review:comments-updated", (e) => {

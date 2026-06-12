@@ -12,6 +12,7 @@ import {
   addComment,
   updateComment,
   deleteComment,
+  setCommentResolved,
   openReplyComposer,
   buildPrompt,
   copyText,
@@ -212,7 +213,7 @@ export function makeSourceAdapter({ state }) {
   function threadCard(c) {
     const idx = state.comments.indexOf(c) + 1;
     const card = document.createElement("div");
-    card.className = "src-card";
+    card.className = "src-card" + (c.resolved ? " resolved" : "");
     card.dataset.id = c.id;
 
     const head = document.createElement("div");
@@ -245,6 +246,14 @@ export function makeSourceAdapter({ state }) {
       const rect = card.getBoundingClientRect();
       openReplyComposer(c, { x: rect.left + 24, y: rect.bottom + 8 });
     });
+    const resolveBtn = document.createElement("button");
+    resolveBtn.className = "src-card-btn resolve";
+    resolveBtn.textContent = c.resolved ? "再開" : "解決";
+    resolveBtn.title = c.resolved ? "未対応に戻す" : "対応済みにする";
+    resolveBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setCommentResolved(c.id, !c.resolved);
+    });
     const editBtn = document.createElement("button");
     editBtn.className = "src-card-btn";
     editBtn.textContent = "✎";
@@ -264,6 +273,7 @@ export function makeSourceAdapter({ state }) {
     });
     head.appendChild(copyBtn);
     head.appendChild(replyBtn);
+    head.appendChild(resolveBtn);
     head.appendChild(editBtn);
     head.appendChild(delBtn);
 

@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.3]
+
+### Fixed
+- In VS Code webviews, operation mode now bridges selected preview text to the
+  host clipboard for `Cmd/Ctrl+C`.
+- Right-clicking selected preview text in operation mode now shows a Copy action
+  when native iframe context menus are unavailable.
+
 ## [0.4.2]
 
 ### Fixed

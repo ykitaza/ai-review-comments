@@ -157,6 +157,8 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
     if (msg.type === "copy") {
       await vscode.env.clipboard.writeText(msg.text);
       vscode.window.showInformationMessage("AIプロンプトをコピーしました。");
+    } else if (msg.type === "copy-text") {
+      await vscode.env.clipboard.writeText(msg.text);
     } else if (msg.type === "reveal" && typeof msg.line === "number") {
       const doc = await vscode.workspace.openTextDocument(fileUri);
       const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
@@ -312,6 +314,7 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
     window.aiReviewHost = {
       reload: () => vscode.postMessage({ type: "reload" }),
       close: () => vscode.postMessage({ type: "close" }),
+      copyText: (text) => vscode.postMessage({ type: "copy-text", text }),
       loadComments: () => requestHost("load-comments"),
       saveComments: (comments) => requestHost("save-comments", { comments }),
     };

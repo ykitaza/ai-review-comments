@@ -55,6 +55,7 @@ export interface BootData {
 /** Messages sent from the webview to the extension host. */
 export type WebviewMessage =
   | { type: "copy"; text: string }
+  | { type: "copy-text"; text: string }
   | { type: "reveal"; line: number }
   | { type: "close" }
   | { type: "reload" }

@@ -6,7 +6,7 @@ import { truncate } from "./core.js";
 
 export function makeRenderAdapter({ state, startComposer }) {
   const frameWrap = document.getElementById("frame-wrap");
-  let iframe, hoverBox, markers;
+  let iframe, hoverBox, markers, copyMenu;
   let mode = "element"; // element | text | off
   let pumlLines = null; // .puml source lines (for plantuml label→line mapping)
 
@@ -36,9 +36,13 @@ export function makeRenderAdapter({ state, startComposer }) {
     markers.id = "markers";
     hoverBox = document.createElement("div");
     hoverBox.id = "hover-box";
+    copyMenu = document.createElement("div");
+    copyMenu.id = "frame-copy-menu";
+    copyMenu.innerHTML = `<button type="button">コピー</button>`;
     frameWrap.appendChild(iframe);
     frameWrap.appendChild(markers);
     frameWrap.appendChild(hoverBox);
+    frameWrap.appendChild(copyMenu);
 
     setupToolbar();
     // for PlantUML, load the source lines so clicks can map labels → line refs
@@ -85,6 +89,7 @@ export function makeRenderAdapter({ state, startComposer }) {
     if (m === "element") frameWrap.classList.add("mode-element");
     if (m === "text") frameWrap.classList.add("mode-text");
     hideHover();
+    hideCopyMenu();
   }
 
   function attachFrameListeners() {
@@ -94,6 +99,8 @@ export function makeRenderAdapter({ state, startComposer }) {
     d.addEventListener("click", onClick, true);
     d.addEventListener("mouseup", onMouseUp, true);
     d.addEventListener("keydown", onFrameKeyDown, true);
+    d.addEventListener("contextmenu", onContextMenu, true);
+    d.addEventListener("click", hideCopyMenu, true);
     win().addEventListener("scroll", relocate, true);
     win().addEventListener("resize", relocate);
   }
@@ -202,7 +209,42 @@ export function makeRenderAdapter({ state, startComposer }) {
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && key === "w" && window.aiReviewHost?.close) {
       e.preventDefault();
       window.aiReviewHost.close();
+    } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && key === "c") {
+      if (!window.aiReviewHost?.copyText) return;
+      const text = selectedText();
+      if (!text) return;
+      e.preventDefault();
+      writeSelectionToClipboard(text);
     }
+  }
+
+  function onContextMenu(e) {
+    if (mode !== "off") return;
+    if (!window.aiReviewHost?.copyText) return;
+    const text = selectedText();
+    if (!text) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const p = frameLocalPos(e);
+    copyMenu.style.display = "block";
+    copyMenu.style.left = `${p.x}px`;
+    copyMenu.style.top = `${p.y}px`;
+    copyMenu.querySelector("button").onclick = () => {
+      writeSelectionToClipboard(text);
+      hideCopyMenu();
+    };
+  }
+
+  function selectedText() {
+    return (win().getSelection()?.toString() || "").trim();
+  }
+
+  function writeSelectionToClipboard(text) {
+    return window.aiReviewHost.copyText(text);
+  }
+
+  function hideCopyMenu() {
+    if (copyMenu) copyMenu.style.display = "none";
   }
 
   // Nearest ancestor's source line number, for preview→source sync.
@@ -220,6 +262,12 @@ export function makeRenderAdapter({ state, startComposer }) {
   function framePos(e) {
     const fr = iframe.getBoundingClientRect();
     return { x: (e.clientX ?? 0) + fr.left + 12, y: (e.clientY ?? 0) + fr.top + 12 };
+  }
+
+  function frameLocalPos(e) {
+    const fr = iframe.getBoundingClientRect();
+    const base = frameWrap.getBoundingClientRect();
+    return { x: (e.clientX ?? 0) + fr.left - base.left, y: (e.clientY ?? 0) + fr.top - base.top };
   }
 
   // ---- pins ---------------------------------------------------------------

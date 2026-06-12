@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.4]
+
+### Changed
+- Fix prompts now tell assistants to check for source files behind generated
+  HTML and rebuild from the source when available.
+
 ## [0.4.3]
 
 ### Fixed

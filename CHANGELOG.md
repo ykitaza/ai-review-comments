@@ -3,6 +3,32 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.9]
+
+### Added
+- Markdown image references to local `.puml` / `.plantuml` files are rendered
+  through the local `plantuml` command.
+
+## [0.3.8]
+
+### Added
+- Markdown preview renders fenced `plantuml` / `puml` blocks through the local
+  `plantuml` command when it is available.
+
+## [0.3.7]
+
+### Changed
+- Markdown preview now uses `markdown-it` while keeping source-line attributes
+  for review comments and Mermaid rendering.
+
+## [0.3.6]
+
+### Fixed
+- Review previews now reload from the latest file content instead of reusing
+  stale browser/webview bootstrap HTML.
+- Browser mode disables HTTP caching for boot data, source, target previews, and
+  webview assets.
+
 ## [0.3.5]
 
 ### Changed

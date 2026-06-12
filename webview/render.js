@@ -27,9 +27,10 @@ export function makeRenderAdapter({ state, startComposer }) {
     // injected as a string; load it via srcdoc (same-origin → clickable).
     // Otherwise load the CLI's /target endpoint.
     if (typeof window.__PREVIEW_HTML__ === "string") {
+      iframe.srcdoc = "";
       iframe.srcdoc = window.__PREVIEW_HTML__;
     } else {
-      iframe.src = "/target";
+      iframe.src = `/target?t=${Date.now()}`;
     }
     markers = document.createElement("div");
     markers.id = "markers";

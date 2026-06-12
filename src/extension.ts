@@ -72,6 +72,7 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
   const fsPath = fileUri.fsPath;
   const fileName = path.basename(fsPath);
   const extensionVersion = String(context.extension.packageJSON.version ?? "dev");
+  let reloadTimer: NodeJS.Timeout | undefined;
 
   const panel = vscode.window.createWebviewPanel(
     "aiReviewComments",
@@ -86,7 +87,7 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
 
   const createBootData = async (): Promise<BootData> => {
     const source = await readCurrentText(fileUri);
-    const previewHtml = renderPreview(fsPath, source);
+    const previewHtml = await renderPreview(fsPath, source);
     const previewKind = previewHtml ? previewKindFor(fsPath) : "none";
 
     const meta: ReviewMeta = {
@@ -102,6 +103,33 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
   };
 
   panel.webview.html = buildHtml(context, panel.webview, await createBootData());
+
+  const pushReload = () => {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(async () => {
+      panel.webview.postMessage({ type: "reload-result", boot: await createBootData() });
+    }, 100);
+  };
+
+  const watcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(path.dirname(fsPath), path.basename(fsPath))
+  );
+  const disposables = [
+    watcher,
+    watcher.onDidChange(pushReload),
+    watcher.onDidCreate(pushReload),
+    panel.onDidChangeViewState((event) => {
+      if (event.webviewPanel.visible) pushReload();
+    }),
+    vscode.workspace.onDidSaveTextDocument((document) => {
+      if (document.uri.toString() === fileUri.toString()) pushReload();
+    }),
+  ];
+
+  panel.onDidDispose(() => {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    disposables.forEach((disposable) => disposable.dispose());
+  });
 
   panel.webview.onDidReceiveMessage(async (msg: WebviewMessage) => {
     if (msg.type === "copy") {
@@ -123,11 +151,11 @@ async function readCurrentText(fileUri: vscode.Uri): Promise<string> {
   const openDocument = vscode.workspace.textDocuments.find(
     (doc) => doc.uri.toString() === fileUri.toString()
   );
-  if (openDocument) return openDocument.getText();
+  if (openDocument?.isDirty) return openDocument.getText();
   try {
     return Buffer.from(await vscode.workspace.fs.readFile(fileUri)).toString("utf8");
   } catch {
-    return "";
+    return openDocument?.getText() ?? "";
   }
 }
 

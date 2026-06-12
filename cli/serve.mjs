@@ -6,7 +6,7 @@
 // server (deferred shutdown, port fallback, target-dir asset serving).
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, watch } from "node:fs";
 import { resolve, dirname, extname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -35,6 +35,16 @@ const MIME = {
   ".woff2": "font/woff2",
 };
 const mimeFor = (p) => MIME[extname(p).toLowerCase()] || "application/octet-stream";
+const NO_STORE = {
+  "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "pragma": "no-cache",
+  "expires": "0",
+};
+const headers = (contentType, extra = {}) => ({
+  "content-type": contentType,
+  ...NO_STORE,
+  ...extra,
+});
 
 // resolved path must stay inside root (no traversal)
 function safeJoin(root, urlPath) {
@@ -68,7 +78,7 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
   };
   const buildBoot = async () => {
     const source = await readFile(targetPath, "utf8").catch(() => "");
-    const previewHtml = renderPreview(targetPath, source);
+    const previewHtml = await renderPreview(targetPath, source);
     return {
       meta,
       source,
@@ -84,34 +94,58 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
     if (shutdownTimer) clearTimeout(shutdownTimer), (shutdownTimer = null);
   };
 
+  const eventClients = new Set();
+  let notifyTimer = null;
+  const notifyChanged = () => {
+    if (notifyTimer) clearTimeout(notifyTimer);
+    notifyTimer = setTimeout(() => {
+      const data = JSON.stringify({ loadedAt: new Date().toISOString() });
+      for (const client of eventClients) {
+        client.write(`event: changed\ndata: ${data}\n\n`);
+      }
+    }, 100);
+  };
+  const fileWatcher = watch(targetPath, { persistent: false }, notifyChanged);
+
   const server = createServer(async (req, res) => {
     const url = req.url || "/";
+    const pathname = url.split("?")[0];
     if (url !== "/__bye") cancelShutdown();
 
-    if (url === "/" || url === "/index.html") {
-      res.writeHead(200, { "content-type": MIME[".html"] });
+    if (pathname === "/" || pathname === "/index.html") {
+      res.writeHead(200, headers(MIME[".html"]));
       return res.end(pageHtml(await buildBoot()));
     }
-    if (url === "/__boot") {
-      res.writeHead(200, { "content-type": MIME[".json"] });
+    if (pathname === "/__boot") {
+      res.writeHead(200, headers(MIME[".json"]));
       return res.end(JSON.stringify(await buildBoot()));
     }
-    if (url === "/__meta") {
-      res.writeHead(200, { "content-type": MIME[".json"] });
+    if (pathname === "/__meta") {
+      res.writeHead(200, headers(MIME[".json"]));
       return res.end(JSON.stringify(meta));
     }
-    if (url === "/__source") {
+    if (pathname === "/__source") {
       const text = await readFile(targetPath, "utf8").catch(() => "");
-      res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+      res.writeHead(200, headers("text/plain; charset=utf-8"));
       return res.end(text);
     }
-    if (url === "/target" || url === "/target/") {
+    if (pathname === "/target" || pathname === "/target/") {
       const text = await readFile(targetPath, "utf8").catch(() => "");
-      const html = renderPreview(targetPath, text);
-      res.writeHead(200, { "content-type": MIME[".html"] });
+      const html = await renderPreview(targetPath, text);
+      res.writeHead(200, headers(MIME[".html"]));
       return res.end(html ?? text);
     }
-    if (url === "/__bye") {
+    if (pathname === "/__events") {
+      res.writeHead(200, headers("text/event-stream; charset=utf-8", {
+        "connection": "keep-alive",
+        "x-accel-buffering": "no",
+      }));
+      res.write("event: ready\ndata: {}\n\n");
+      eventClients.add(res);
+      req.on("close", () => eventClients.delete(res));
+      return;
+    }
+    if (pathname === "/__bye") {
       res.writeHead(204);
       res.end();
       if (!keepAlive) {
@@ -129,20 +163,24 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
     if (uiAsset) {
       const p = join(WEBVIEW_DIR, uiAsset[1] === "styles.css" ? "styles.css" : uiAsset[1]);
       if (existsSync(p)) {
-        res.writeHead(200, { "content-type": mimeFor(p) });
+        res.writeHead(200, headers(mimeFor(p)));
         return res.end(await readFile(p));
       }
     }
 
     // fallback: serve the target's directory so the HTML preview's relative
     // assets (css/images) keep working
-    const filePath = safeJoin(targetDir, url);
+    const filePath = safeJoin(targetDir, pathname);
     if (filePath && existsSync(filePath)) {
-      res.writeHead(200, { "content-type": mimeFor(filePath) });
+      res.writeHead(200, headers(mimeFor(filePath)));
       return res.end(await readFile(filePath));
     }
-    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.writeHead(404, headers("text/plain; charset=utf-8"));
     res.end("404 Not Found");
+  });
+  server.on("close", () => {
+    if (notifyTimer) clearTimeout(notifyTimer);
+    fileWatcher.close();
   });
 
   // try the port; walk forward if busy
@@ -158,7 +196,7 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
   });
   server.on("listening", () => {
     const actualPort = server.address().port;
-    const link = `http://127.0.0.1:${actualPort}/`;
+    const link = `http://127.0.0.1:${actualPort}/?t=${Date.now()}`;
     console.log(`\n  ai-review  ▸ ${key}`);
     console.log(`  open       ▸ ${link}`);
     if (keepAlive) console.log(`  keep-alive ▸ on`);
@@ -256,12 +294,22 @@ function pageHtml(boot) {
     if (BOOT.previewHtml) window.__PREVIEW_HTML__ = BOOT.previewHtml;
     window.aiReviewHost = {
       reload: async () => {
-        BOOT = await fetch("/__boot").then((r) => r.json());
+        BOOT = await fetch("/__boot?t=" + Date.now(), { cache: "no-store" }).then((r) => r.json());
         window.__AI_REVIEW_BOOT__ = BOOT;
         window.__PREVIEW_HTML__ = BOOT.previewHtml || "";
         window.dispatchEvent(new CustomEvent("ai-review:reload", { detail: BOOT }));
       },
     };
+
+    if (window.EventSource) {
+      const events = new EventSource("/__events");
+      let reloadTimer = null;
+      events.addEventListener("changed", () => {
+        if (reloadTimer) clearTimeout(reloadTimer);
+        reloadTimer = setTimeout(() => window.aiReviewHost.reload(), 100);
+      });
+      window.addEventListener("pagehide", () => events.close());
+    }
 
     // tell the server when the tab goes away (difit-style shutdown)
     window.addEventListener("pagehide", () => {

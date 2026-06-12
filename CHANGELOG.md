@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.5]
+
+### Changed
+- Review UI comments are now session-only. Reloading or reopening the review
+  clears comments instead of restoring them from `.ai-review/comments.json`.
+
 ## [0.3.4]
 
 ### Added

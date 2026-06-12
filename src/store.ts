@@ -3,7 +3,7 @@
 // and any AI agent — so comments can be read AND written from outside VS Code.
 import * as vscode from "vscode";
 import * as path from "node:path";
-import type { CommentStore, ReviewComment, PersistedComments } from "./types.js";
+import type { CommentStore, ReviewComment } from "./types.js";
 
 export const STORE_DIR = ".ai-review";
 export const STORE_FILE = "comments.json";
@@ -53,20 +53,4 @@ export async function writeComments(
   await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(root, STORE_DIR));
   await vscode.workspace.fs.writeFile(storeUri(root), Buffer.from(json, "utf8"));
   return json;
-}
-
-/** One-time migration from the old workspaceState persistence. */
-export async function migrateFromWorkspaceState(
-  context: vscode.ExtensionContext,
-  root: vscode.Uri,
-  key: string,
-  fsPath: string
-): Promise<void> {
-  const existing = await readComments(root, key);
-  if (existing.length) return; // file store already has data
-  const old = context.workspaceState.get<PersistedComments | null>("review:" + fsPath, null);
-  if (old?.comments?.length) {
-    await writeComments(root, key, old.comments);
-    await context.workspaceState.update("review:" + fsPath, undefined);
-  }
 }

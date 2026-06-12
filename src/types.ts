@@ -43,16 +43,10 @@ export interface CommentStore {
   files: Record<string, { comments: ReviewComment[] }>;
 }
 
-export interface PersistedComments {
-  path: string;
-  comments: ReviewComment[];
-}
-
 /** The bootstrap payload injected into the webview. */
 export interface BootData {
   meta: ReviewMeta;
   source: string;
-  saved: PersistedComments | null;
   previewHtml: string | null;
   extensionVersion: string;
   loadedAt: string;
@@ -60,7 +54,6 @@ export interface BootData {
 
 /** Messages sent from the webview to the extension host. */
 export type WebviewMessage =
-  | { type: "save"; payload: PersistedComments }
   | { type: "copy"; text: string }
   | { type: "reveal"; line: number }
   | { type: "reload" };

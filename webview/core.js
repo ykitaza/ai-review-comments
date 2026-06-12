@@ -32,22 +32,8 @@ let pending = null; // selection awaiting a comment
 let editingId = null; // comment being edited
 
 // ---------------------------------------------------------------------------
-// persistence: comments are owned by the host (VS Code extension or browser
-// server). The webview keeps only an in-memory copy for rendering.
-async function loadComments() {
-  try {
-    const comments = await window.aiReviewHost?.loadComments?.();
-    if (Array.isArray(comments)) replaceComments(comments);
-  } catch {
-    replaceComments([]);
-  }
-}
-export function save() {
-  const payload = { path: state.meta.path, comments: state.comments };
-  if (window.aiReviewHost?.saveComments) {
-    window.aiReviewHost.saveComments(payload);
-  }
-}
+// comments are intentionally session-only. Reloading or reopening starts fresh.
+export function save() {}
 function replaceComments(comments) {
   state.comments = comments;
   state.nextId = comments.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
@@ -88,7 +74,7 @@ export async function init(makeAdapter) {
   setVersionBadge();
   document.title = `Review — ${meta.file}`;
 
-  await loadComments();
+  replaceComments([]);
   loadTemplate(); // restore the user's chosen prompt template
 
   // makeAdapter may return an adapter, or a "controller" that manages multiple
@@ -99,14 +85,6 @@ export async function init(makeAdapter) {
   renderComments();
   adapter.relocate?.();
 
-  // external updates: the CLI / an AI agent changed the comment store —
-  // replace our list and re-render (the host relays these as a DOM event).
-  window.addEventListener("ai-review:comments", (e) => {
-    const list = Array.isArray(e.detail) ? e.detail : [];
-    replaceComments(list);
-    renderComments();
-    adapter?.relocate?.();
-  });
 }
 
 export function applyBootData(boot) {
@@ -114,8 +92,7 @@ export function applyBootData(boot) {
   els.fileLabel.textContent = boot.meta.file;
   els.fileLabel.title = boot.meta.path;
   document.title = `Review — ${boot.meta.file}`;
-  const comments = Array.isArray(boot.saved?.comments) ? boot.saved.comments : [];
-  replaceComments(comments);
+  replaceComments([]);
   setVersionBadge(boot);
 }
 

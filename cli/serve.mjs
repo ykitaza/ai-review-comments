@@ -6,12 +6,12 @@
 // server (deferred shutdown, port fallback, target-dir asset serving).
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { watch, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { resolve, dirname, extname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { renderPreview, previewKindFor, langFor } from "../shared/render.mjs";
-import { findRoot, storePathFor, readStoreSync, writeStoreSync, keyFor } from "../shared/store.mjs";
+import { findRoot, keyFor } from "../shared/store.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEBVIEW_DIR = existsSync(resolve(__dirname, "..", "webview"))
@@ -69,38 +69,14 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
   const buildBoot = async () => {
     const source = await readFile(targetPath, "utf8").catch(() => "");
     const previewHtml = renderPreview(targetPath, source);
-    const comments = readStoreSync(root).files[key]?.comments ?? [];
     return {
       meta,
       source,
-      saved: comments.length ? { path: targetPath, comments } : null,
       previewHtml,
       extensionVersion: "browser",
       loadedAt: new Date().toISOString(),
     };
   };
-
-  // ensure the store dir exists so fs.watch has something to watch
-  mkdirSync(join(root, ".ai-review"), { recursive: true });
-  let lastWritten = ""; // our own writes, so the watcher can skip the echo
-
-  const sseClients = new Set();
-  const pushComments = () => {
-    const comments = readStoreSync(root).files[key]?.comments ?? [];
-    const payload = `data: ${JSON.stringify(comments)}\n\n`;
-    for (const res of sseClients) res.write(payload);
-  };
-  watch(join(root, ".ai-review"), (_event, fname) => {
-    if (fname && fname !== "comments.json") return;
-    let raw = "";
-    try {
-      raw = readFileSync(storePathFor(root), "utf8");
-    } catch {
-      /* deleted */
-    }
-    if (raw === lastWritten) return;
-    pushComments();
-  });
 
   // deferred shutdown: tab close schedules an exit; any new request cancels it
   let shutdownTimer = null;
@@ -124,10 +100,6 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
       res.writeHead(200, { "content-type": MIME[".json"] });
       return res.end(JSON.stringify(meta));
     }
-    if (url === "/__comments") {
-      res.writeHead(200, { "content-type": MIME[".json"] });
-      return res.end(JSON.stringify(readStoreSync(root).files[key]?.comments ?? []));
-    }
     if (url === "/__source") {
       const text = await readFile(targetPath, "utf8").catch(() => "");
       res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
@@ -138,35 +110,6 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
       const html = renderPreview(targetPath, text);
       res.writeHead(200, { "content-type": MIME[".html"] });
       return res.end(html ?? text);
-    }
-    if (url === "/__save" && req.method === "POST") {
-      let body = "";
-      req.on("data", (c) => (body += c));
-      req.on("end", () => {
-        try {
-          const { comments } = JSON.parse(body);
-          const store = readStoreSync(root);
-          if (Array.isArray(comments) && comments.length) store.files[key] = { comments };
-          else delete store.files[key];
-          lastWritten = writeStoreSync(root, store);
-          res.writeHead(204);
-        } catch {
-          res.writeHead(400);
-        }
-        res.end();
-      });
-      return;
-    }
-    if (url === "/__events") {
-      res.writeHead(200, {
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-      });
-      res.write("\n");
-      sseClients.add(res);
-      req.on("close", () => sseClients.delete(res));
-      return;
     }
     if (url === "/__bye") {
       res.writeHead(204);
@@ -217,7 +160,6 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
     const actualPort = server.address().port;
     const link = `http://127.0.0.1:${actualPort}/`;
     console.log(`\n  ai-review  ▸ ${key}`);
-    console.log(`  store      ▸ ${storePathFor(root)}`);
     console.log(`  open       ▸ ${link}`);
     if (keepAlive) console.log(`  keep-alive ▸ on`);
     console.log(`\n  Ctrl+C で終了\n`);
@@ -234,8 +176,8 @@ function openBrowser(url) {
 }
 
 // The same DOM skeleton the extension's webview uses, plus a small browser
-// bridge: comment mutations POST to /__save, SSE pushes external changes, tab
-// close notifies /__bye. Everything else uses the real browser APIs.
+// bridge: reload requests fresh BootData; tab close notifies /__bye.
+// Comments are intentionally session-only and disappear on reload/reopen.
 function pageHtml(boot) {
   const meta = boot.meta;
   const injected = JSON.stringify(boot).replace(/</g, "\\u003c");
@@ -313,8 +255,6 @@ function pageHtml(boot) {
     window.__AI_REVIEW_BOOT__ = BOOT;
     if (BOOT.previewHtml) window.__PREVIEW_HTML__ = BOOT.previewHtml;
     window.aiReviewHost = {
-      loadComments: () => fetch("/__comments").then((r) => r.json()),
-      saveComments: (payload) => fetch("/__save", { method: "POST", body: JSON.stringify(payload) }),
       reload: async () => {
         BOOT = await fetch("/__boot").then((r) => r.json());
         window.__AI_REVIEW_BOOT__ = BOOT;
@@ -322,17 +262,6 @@ function pageHtml(boot) {
         window.dispatchEvent(new CustomEvent("ai-review:reload", { detail: BOOT }));
       },
     };
-
-    // live updates from the CLI / AI agent
-    try {
-      const es = new EventSource("/__events");
-      es.onmessage = (e) => {
-        try {
-          const comments = JSON.parse(e.data);
-          window.dispatchEvent(new CustomEvent("ai-review:comments", { detail: comments }));
-        } catch {}
-      };
-    } catch {}
 
     // tell the server when the tab goes away (difit-style shutdown)
     window.addEventListener("pagehide", () => {

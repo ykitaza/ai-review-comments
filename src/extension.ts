@@ -1,18 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
-import type { BootData, ReviewMeta, WebviewMessage, PersistedComments } from "./types.js";
+import type { BootData, ReviewMeta, WebviewMessage } from "./types.js";
 import { previewKindFor, langFor, renderPreview } from "./render/index.js";
-import {
-  workspaceRootFor,
-  storeKeyFor,
-  storeUri,
-  readComments,
-  writeComments,
-  migrateFromWorkspaceState,
-  STORE_DIR,
-  STORE_FILE,
-} from "./store.js";
+import { workspaceRootFor } from "./store.js";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -89,16 +80,10 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
     vscode.ViewColumn.Active,
     {
       enableScripts: true,
-      retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "dist", "webview")],
     }
   );
 
-  // Comments live in <workspace>/.ai-review/comments.json so AI agents and the
-  // CLI can read/write them too. Outside a workspace, fall back to
-  // workspaceState (no external sharing possible there).
-  const root = workspaceRootFor(fileUri);
-  const key = root ? storeKeyFor(root, fileUri) : null;
   const createBootData = async (): Promise<BootData> => {
     const source = await readCurrentText(fileUri);
     const previewHtml = renderPreview(fsPath, source);
@@ -113,33 +98,13 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       lang: langFor(fsPath),
     };
 
-    let saved: PersistedComments | null = null;
-    if (root && key) {
-      await migrateFromWorkspaceState(context, root, key, fsPath);
-      const comments = await readComments(root, key);
-      saved = comments.length ? { path: fsPath, comments } : null;
-    } else {
-      saved = context.workspaceState.get<PersistedComments | null>("review:" + fsPath, null);
-    }
-
-    return { meta, source, saved, previewHtml, extensionVersion, loadedAt: new Date().toISOString() };
+    return { meta, source, previewHtml, extensionVersion, loadedAt: new Date().toISOString() };
   };
 
   panel.webview.html = buildHtml(context, panel.webview, await createBootData());
 
-  // remember what we last wrote so the watcher can ignore our own writes
-  let lastWritten = "";
-
   panel.webview.onDidReceiveMessage(async (msg: WebviewMessage) => {
-    if (msg.type === "save") {
-      const comments = msg.payload.comments ?? [];
-      if (root && key) {
-        lastWritten = await writeComments(root, key, comments);
-      } else {
-        await context.workspaceState.update("review:" + fsPath, msg.payload);
-      }
-      panel.webview.postMessage({ type: "comments", comments });
-    } else if (msg.type === "copy") {
+    if (msg.type === "copy") {
       await vscode.env.clipboard.writeText(msg.text);
       vscode.window.showInformationMessage("AIプロンプトをコピーしました。");
     } else if (msg.type === "reveal" && typeof msg.line === "number") {
@@ -152,30 +117,6 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       panel.webview.postMessage({ type: "reload-result", boot: await createBootData() });
     }
   });
-
-  // Watch the store file: when the CLI / an AI agent adds or resolves comments,
-  // push the new list into the open panel immediately.
-  if (root && key) {
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(root, `${STORE_DIR}/${STORE_FILE}`)
-    );
-    const onStoreChange = async () => {
-      let raw = "";
-      try {
-        raw = Buffer.from(await vscode.workspace.fs.readFile(storeUri(root))).toString("utf8");
-      } catch {
-        /* deleted → treat as empty */
-      }
-
-      if (raw === lastWritten) return; // our own write echoing back
-      const comments = await readComments(root, key);
-      panel.webview.postMessage({ type: "comments", comments });
-    };
-    watcher.onDidChange(onStoreChange);
-    watcher.onDidCreate(onStoreChange);
-    watcher.onDidDelete(onStoreChange);
-    panel.onDidDispose(() => watcher.dispose());
-  }
 }
 
 async function readCurrentText(fileUri: vscode.Uri): Promise<string> {
@@ -293,18 +234,13 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
     if (!navigator.clipboard) navigator.clipboard = {};
     navigator.clipboard.writeText = (t) => { vscode.postMessage({ type: "copy", text: t }); return Promise.resolve(); };
     window.aiReviewHost = {
-      loadComments: () => Promise.resolve(BOOT.saved?.comments || []),
-      saveComments: (payload) => vscode.postMessage({ type: "save", payload }),
       reload: () => vscode.postMessage({ type: "reload" }),
     };
 
-    // host → webview: external comment updates (CLI / AI agent edited the
-    // store file). Relayed to the UI as a DOM event the core engine listens to.
+    // host → webview: latest file content after reload.
     window.addEventListener("message", (e) => {
       const m = e.data;
-      if (m && m.type === "comments" && Array.isArray(m.comments)) {
-        window.dispatchEvent(new CustomEvent("ai-review:comments", { detail: m.comments }));
-      } else if (m && m.type === "reload-result" && m.boot) {
+      if (m && m.type === "reload-result" && m.boot) {
         BOOT = m.boot;
         window.__AI_REVIEW_BOOT__ = BOOT;
         window.__PREVIEW_HTML__ = BOOT.previewHtml || "";

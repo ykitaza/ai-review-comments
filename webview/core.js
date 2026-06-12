@@ -405,7 +405,8 @@ export const TEMPLATE_PRESETS = {
     label: "質問する",
     body:
       "以下は `{{file}}` に対する質問・確認事項です（{{count}}件）。\n" +
-      "それぞれの箇所について、質問に回答してください。修正はまだ行わず、まず説明と提案をお願いします。\n\n" +
+      "それぞれの箇所について、質問に回答してください。修正はまだ行わず、まず説明と提案をお願いします。\n" +
+      "AI Review Comments のコメント機能が使える環境では、回答を各コメントIDへの返信として残してください。使えない場合は、各回答に `返信先: #ID` を明記してください。\n\n" +
       "{{comments}}\n\n" +
       "---\n" +
       "不明点があれば質問し返してください。",
@@ -460,6 +461,7 @@ function formatComment(c, index, total) {
   const single = total === 1;
   const out = [];
   out.push(single ? `## コメント` : `## コメント ${index + 1}`);
+  out.push(`- コメントID: \`#${c.id}\``);
   out.push(`- 対象ファイル: \`${fullPath}\``);
   if (c.replyTo) out.push(`- 返信先: \`#${c.replyTo}\``);
   if (c.kind === "lines") {

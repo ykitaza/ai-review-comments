@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.1]
+
+### Changed
+- Question prompts now ask AI assistants to answer as replies to the original
+  comment IDs when possible.
+- Copied prompts include each review comment's stable `#id`.
+
 ## [0.4.0]
 
 ### Added

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { spawn } from "node:child_process";
 import type { BootData, ReviewMeta, WebviewMessage } from "./types.js";
 import { previewKindFor, langFor, renderPreview } from "./render/index.js";
-import { workspaceRootFor } from "./store.js";
+import { readComments, storeKeyFor, workspaceRootFor, writeComments } from "./store.js";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -72,7 +72,10 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
   const fsPath = fileUri.fsPath;
   const fileName = path.basename(fsPath);
   const extensionVersion = String(context.extension.packageJSON.version ?? "dev");
+  const root = workspaceRootFor(fileUri);
+  const storeKey = root ? storeKeyFor(root, fileUri) : undefined;
   let reloadTimer: NodeJS.Timeout | undefined;
+  let commentTimer: NodeJS.Timeout | undefined;
 
   const panel = vscode.window.createWebviewPanel(
     "aiReviewComments",
@@ -114,10 +117,28 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
   const watcher = vscode.workspace.createFileSystemWatcher(
     new vscode.RelativePattern(path.dirname(fsPath), path.basename(fsPath))
   );
+  const storeWatcher = root
+    ? vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(root.fsPath, ".ai-review/comments.json")
+      )
+    : undefined;
+  const pushComments = () => {
+    if (!root || !storeKey) return;
+    if (commentTimer) clearTimeout(commentTimer);
+    commentTimer = setTimeout(async () => {
+      panel.webview.postMessage({
+        type: "comments-updated",
+        comments: await readComments(root, storeKey),
+      });
+    }, 100);
+  };
   const disposables = [
     watcher,
     watcher.onDidChange(pushReload),
     watcher.onDidCreate(pushReload),
+    ...(storeWatcher
+      ? [storeWatcher, storeWatcher.onDidChange(pushComments), storeWatcher.onDidCreate(pushComments)]
+      : []),
     panel.onDidChangeViewState((event) => {
       if (event.webviewPanel.visible) pushReload();
     }),
@@ -128,6 +149,7 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
 
   panel.onDidDispose(() => {
     if (reloadTimer) clearTimeout(reloadTimer);
+    if (commentTimer) clearTimeout(commentTimer);
     disposables.forEach((disposable) => disposable.dispose());
   });
 
@@ -143,6 +165,23 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
     } else if (msg.type === "reload") {
       panel.webview.postMessage({ type: "reload-result", boot: await createBootData() });
+    } else if (msg.type === "load-comments") {
+      const comments = root && storeKey ? await readComments(root, storeKey) : [];
+      panel.webview.postMessage({ type: "load-comments-result", requestId: msg.requestId, comments });
+    } else if (msg.type === "save-comments") {
+      try {
+        if (root && storeKey) {
+          await writeComments(root, storeKey, msg.comments);
+        }
+        panel.webview.postMessage({ type: "save-comments-result", requestId: msg.requestId, ok: true });
+      } catch (error) {
+        panel.webview.postMessage({
+          type: "save-comments-result",
+          requestId: msg.requestId,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   });
 }
@@ -248,6 +287,8 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
     // host bridge: the webview UI talks to the extension instead of an HTTP server
     const vscode = acquireVsCodeApi();
     let BOOT = ${injected};
+    let requestId = 1;
+    const pendingRequests = new Map();
     window.__AI_REVIEW_BOOT__ = BOOT;
     if (BOOT.previewHtml) window.__PREVIEW_HTML__ = BOOT.previewHtml;
 
@@ -261,8 +302,15 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
 
     if (!navigator.clipboard) navigator.clipboard = {};
     navigator.clipboard.writeText = (t) => { vscode.postMessage({ type: "copy", text: t }); return Promise.resolve(); };
+    const requestHost = (type, payload = {}) => new Promise((resolve, reject) => {
+      const id = requestId++;
+      pendingRequests.set(id, { resolve, reject });
+      vscode.postMessage({ type, requestId: id, ...payload });
+    });
     window.aiReviewHost = {
       reload: () => vscode.postMessage({ type: "reload" }),
+      loadComments: () => requestHost("load-comments"),
+      saveComments: (comments) => requestHost("save-comments", { comments }),
     };
 
     // host → webview: latest file content after reload.
@@ -273,6 +321,15 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
         window.__AI_REVIEW_BOOT__ = BOOT;
         window.__PREVIEW_HTML__ = BOOT.previewHtml || "";
         window.dispatchEvent(new CustomEvent("ai-review:reload", { detail: BOOT }));
+      } else if (m && (m.type === "load-comments-result" || m.type === "save-comments-result")) {
+        const pending = pendingRequests.get(m.requestId);
+        if (pending) {
+          pendingRequests.delete(m.requestId);
+          if (m.ok === false) pending.reject(new Error(m.error || "host request failed"));
+          else pending.resolve(m.comments ?? true);
+        }
+      } else if (m && m.type === "comments-updated") {
+        window.dispatchEvent(new CustomEvent("ai-review:comments-updated", { detail: m.comments || [] }));
       }
     });
   </script>

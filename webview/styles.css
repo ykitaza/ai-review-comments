@@ -477,12 +477,12 @@ html, body {
   letter-spacing: 0.04em;
 }
 .comment-copy {
-  margin-left: auto;
   background: none; border: none;
   color: var(--muted);
   cursor: pointer; font-size: 13px;
   padding: 2px 5px; border-radius: 4px;
 }
+.comment-head .comment-copy:first-of-type { margin-left: auto; }
 .comment-copy:hover { color: var(--accent); background: rgba(79,140,255,0.12); }
 .comment-copy.copied { color: var(--ok); }
 .comment-del {
@@ -730,6 +730,10 @@ button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .comment.resolved { opacity: 0.55; }
 .comment.resolved .comment-body { text-decoration: line-through; }
+.comment.reply {
+  margin-left: 18px;
+  border-left-color: rgba(110, 168, 255, 0.35);
+}
 .comment-reply {
   font-size: 10.5px;
   color: var(--accent-2);

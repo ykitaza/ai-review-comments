@@ -11,7 +11,7 @@ import { resolve, dirname, extname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { renderPreview, previewKindFor, langFor } from "../shared/render.mjs";
-import { findRoot, keyFor } from "../shared/store.mjs";
+import { findRoot, keyFor, readStoreSync, storePathFor, writeStoreSync } from "../shared/store.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEBVIEW_DIR = existsSync(resolve(__dirname, "..", "webview"))
@@ -87,6 +87,13 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
       loadedAt: new Date().toISOString(),
     };
   };
+  const commentsForFile = () => readStoreSync(root).files[key]?.comments ?? [];
+  const writeCommentsForFile = (comments) => {
+    const store = readStoreSync(root);
+    if (comments.length) store.files[key] = { comments };
+    else delete store.files[key];
+    writeStoreSync(root, store);
+  };
 
   // deferred shutdown: tab close schedules an exit; any new request cancels it
   let shutdownTimer = null;
@@ -106,6 +113,12 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
     }, 100);
   };
   const fileWatcher = watch(targetPath, { persistent: false }, notifyChanged);
+  let storeWatcher = null;
+  if (existsSync(storePathFor(root))) {
+    storeWatcher = watch(storePathFor(root), { persistent: false }, () => {
+      for (const client of eventClients) client.write("event: comments\ndata: {}\n\n");
+    });
+  }
 
   const server = createServer(async (req, res) => {
     const url = req.url || "/";
@@ -128,6 +141,32 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
       const text = await readFile(targetPath, "utf8").catch(() => "");
       res.writeHead(200, headers("text/plain; charset=utf-8"));
       return res.end(text);
+    }
+    if (pathname === "/__comments") {
+      if (req.method === "GET") {
+        res.writeHead(200, headers(MIME[".json"]));
+        return res.end(JSON.stringify({ comments: commentsForFile() }));
+      }
+      if (req.method === "POST") {
+        const chunks = [];
+        req.on("data", (chunk) => chunks.push(chunk));
+        req.on("end", () => {
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+            const comments = Array.isArray(body.comments) ? body.comments : [];
+            writeCommentsForFile(comments);
+            res.writeHead(200, headers(MIME[".json"]));
+            res.end(JSON.stringify({ ok: true }));
+            for (const client of eventClients) client.write("event: comments\ndata: {}\n\n");
+          } catch (error) {
+            res.writeHead(400, headers(MIME[".json"]));
+            res.end(JSON.stringify({ ok: false, error: error.message || String(error) }));
+          }
+        });
+        return;
+      }
+      res.writeHead(405, headers("text/plain; charset=utf-8"));
+      return res.end("Method Not Allowed");
     }
     if (pathname === "/target" || pathname === "/target/") {
       const text = await readFile(targetPath, "utf8").catch(() => "");
@@ -181,6 +220,7 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
   server.on("close", () => {
     if (notifyTimer) clearTimeout(notifyTimer);
     fileWatcher.close();
+    storeWatcher?.close();
   });
 
   // try the port; walk forward if busy
@@ -215,7 +255,7 @@ function openBrowser(url) {
 
 // The same DOM skeleton the extension's webview uses, plus a small browser
 // bridge: reload requests fresh BootData; tab close notifies /__bye.
-// Comments are intentionally session-only and disappear on reload/reopen.
+// Preview HTML is regenerated on reload; comments persist via .ai-review only.
 function pageHtml(boot) {
   const meta = boot.meta;
   const injected = JSON.stringify(boot).replace(/</g, "\\u003c");
@@ -299,6 +339,19 @@ function pageHtml(boot) {
         window.__PREVIEW_HTML__ = BOOT.previewHtml || "";
         window.dispatchEvent(new CustomEvent("ai-review:reload", { detail: BOOT }));
       },
+      loadComments: async () => {
+        const data = await fetch("/__comments?t=" + Date.now(), { cache: "no-store" }).then((r) => r.json());
+        return data.comments || [];
+      },
+      saveComments: async (comments) => {
+        const res = await fetch("/__comments", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ comments }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "コメントを保存できませんでした");
+      },
     };
 
     if (window.EventSource) {
@@ -307,6 +360,10 @@ function pageHtml(boot) {
       events.addEventListener("changed", () => {
         if (reloadTimer) clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => window.aiReviewHost.reload(), 100);
+      });
+      events.addEventListener("comments", async () => {
+        const comments = await window.aiReviewHost.loadComments();
+        window.dispatchEvent(new CustomEvent("ai-review:comments-updated", { detail: comments }));
       });
       window.addEventListener("pagehide", () => events.close());
     }

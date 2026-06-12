@@ -30,13 +30,28 @@ export const state = {
 let adapter = null; // set by init()
 let pending = null; // selection awaiting a comment
 let editingId = null; // comment being edited
+let replyParentId = null; // comment being replied to
 
 // ---------------------------------------------------------------------------
-// comments are intentionally session-only. Reloading or reopening starts fresh.
-export function save() {}
+// Comments are persisted by the host only. Preview HTML/webview state is never
+// persisted, so reopening always regenerates the rendered content from the file.
+export function save() {
+  window.aiReviewHost?.saveComments?.(state.comments).catch((error) => {
+    console.error("Failed to save review comments", error);
+  });
+}
 function replaceComments(comments) {
   state.comments = comments;
   state.nextId = comments.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
+}
+async function loadComments() {
+  try {
+    const comments = await window.aiReviewHost?.loadComments?.();
+    replaceComments(Array.isArray(comments) ? comments : []);
+  } catch (error) {
+    console.error("Failed to load review comments", error);
+    replaceComments([]);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +89,7 @@ export async function init(makeAdapter) {
   setVersionBadge();
   document.title = `Review — ${meta.file}`;
 
-  replaceComments([]);
+  await loadComments();
   loadTemplate(); // restore the user's chosen prompt template
 
   // makeAdapter may return an adapter, or a "controller" that manages multiple
@@ -87,12 +102,12 @@ export async function init(makeAdapter) {
 
 }
 
-export function applyBootData(boot) {
+export async function applyBootData(boot) {
   state.meta = boot.meta;
   els.fileLabel.textContent = boot.meta.file;
   els.fileLabel.title = boot.meta.path;
   document.title = `Review — ${boot.meta.file}`;
-  replaceComments([]);
+  await loadComments();
   setVersionBadge(boot);
 }
 
@@ -123,6 +138,7 @@ export function refresh() {
 export function startComposer(target, position) {
   pending = target;
   editingId = null;
+  replyParentId = null;
   els.composerTarget.textContent = composerLabel(target);
   els.composerInput.value = "";
   placeComposer(position);
@@ -133,10 +149,22 @@ export function startComposer(target, position) {
 function openEditComposer(c) {
   pending = null;
   editingId = c.id;
+  replyParentId = null;
   els.composerTarget.textContent = composerLabel(c);
   els.composerInput.value = c.body;
   els.composer.style.top = "120px";
   els.composer.style.left = "calc(50% - 160px)";
+  els.composer.classList.remove("hidden");
+  els.composerInput.focus();
+}
+
+export function openReplyComposer(c, position) {
+  pending = replyTargetOf(c);
+  editingId = null;
+  replyParentId = c.id;
+  els.composerTarget.textContent = `↪ #${c.id} への返信 · ${composerLabel(c)}`;
+  els.composerInput.value = "";
+  placeComposer(position || { x: window.innerWidth / 2 - 160, y: 120 });
   els.composer.classList.remove("hidden");
   els.composerInput.focus();
 }
@@ -160,6 +188,7 @@ function closeComposer() {
   els.composer.classList.add("hidden");
   pending = null;
   editingId = null;
+  replyParentId = null;
 }
 
 function saveComposer() {
@@ -172,7 +201,7 @@ function saveComposer() {
     const c = state.comments.find((c) => c.id === editingId);
     if (c) c.body = body;
   } else if (pending) {
-    state.comments.push({ id: state.nextId++, ...pending, body });
+    state.comments.push({ id: state.nextId++, ...pending, body, ...(replyParentId ? { replyTo: replyParentId } : {}) });
   }
   save();
   closeComposer();
@@ -199,7 +228,7 @@ export function renderComments() {
   els.comments.innerHTML = "";
   state.comments.forEach((c, i) => {
     const li = document.createElement("li");
-    li.className = "comment" + (c.resolved ? " resolved" : "");
+    li.className = "comment" + (c.resolved ? " resolved" : "") + (c.replyTo ? " reply" : "");
     li.dataset.id = c.id;
 
     const head = document.createElement("div");
@@ -228,6 +257,14 @@ export function renderComments() {
       e.stopPropagation();
       openEditComposer(c);
     });
+    const reply = document.createElement("button");
+    reply.className = "comment-copy";
+    reply.textContent = "↩";
+    reply.title = "返信";
+    reply.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openReplyComposer(c);
+    });
     const del = document.createElement("button");
     del.className = "comment-del";
     del.textContent = "🗑";
@@ -240,6 +277,7 @@ export function renderComments() {
       adapter?.relocate?.();
     });
     head.appendChild(copyOne);
+    head.appendChild(reply);
     head.appendChild(edit);
     head.appendChild(del);
     li.appendChild(head);
@@ -275,6 +313,17 @@ export function renderComments() {
     li.addEventListener("dblclick", () => openEditComposer(c));
     els.comments.appendChild(li);
   });
+}
+
+window.addEventListener("ai-review:comments-updated", (e) => {
+  replaceComments(Array.isArray(e.detail) ? e.detail : []);
+  renderComments();
+  adapter?.relocate?.();
+});
+
+function replyTargetOf(c) {
+  const { id, body, resolved, resolutionNote, author, replyTo, ...target } = c;
+  return target;
 }
 
 function kindLabel(c) {
@@ -412,6 +461,7 @@ function formatComment(c, index, total) {
   const out = [];
   out.push(single ? `## コメント` : `## コメント ${index + 1}`);
   out.push(`- 対象ファイル: \`${fullPath}\``);
+  if (c.replyTo) out.push(`- 返信先: \`#${c.replyTo}\``);
   if (c.kind === "lines") {
     const ref = c.range ? `L${c.range[0]}-L${c.range[1]}` : `L${c.line}`;
     out.push(`- 対象行: \`${ref}\``);

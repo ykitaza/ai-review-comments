@@ -60,7 +60,7 @@ init((ctx) => {
   }
 
   window.addEventListener("ai-review:reload", async (e) => {
-    applyBootData(e.detail);
+    await applyBootData(e.detail);
     frameWrap.innerHTML = "";
     const view = current || state.meta.defaultView || "source";
     const a = factories[view]();

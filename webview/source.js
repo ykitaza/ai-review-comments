@@ -12,6 +12,7 @@ import {
   addComment,
   updateComment,
   deleteComment,
+  openReplyComposer,
   buildPrompt,
   copyText,
   lineRangeOf,
@@ -223,7 +224,7 @@ export function makeSourceAdapter({ state }) {
     const fromPreview = c.kind !== "lines";
     head.innerHTML = `<span class="comment-num">${idx}</span><span class="src-card-ref">${ref}${
       c.path ? ` · ${escapeHtml(c.path)}` : ""
-    }</span>${fromPreview ? `<span class="src-card-tag">プレビュー</span>` : ""}`;
+    }</span>${c.replyTo ? `<span class="comment-reply" title="#${c.replyTo} への返信">↪ #${c.replyTo}</span>` : ""}${fromPreview ? `<span class="src-card-tag">プレビュー</span>` : ""}`;
 
     const copyBtn = document.createElement("button");
     copyBtn.className = "src-card-btn";
@@ -234,6 +235,15 @@ export function makeSourceAdapter({ state }) {
       copyText(buildPrompt([c]));
       copyBtn.textContent = "✓";
       setTimeout(() => (copyBtn.textContent = "📋"), 1000);
+    });
+    const replyBtn = document.createElement("button");
+    replyBtn.className = "src-card-btn";
+    replyBtn.textContent = "↩";
+    replyBtn.title = "返信";
+    replyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const rect = card.getBoundingClientRect();
+      openReplyComposer(c, { x: rect.left + 24, y: rect.bottom + 8 });
     });
     const editBtn = document.createElement("button");
     editBtn.className = "src-card-btn";
@@ -253,6 +263,7 @@ export function makeSourceAdapter({ state }) {
       relocate();
     });
     head.appendChild(copyBtn);
+    head.appendChild(replyBtn);
     head.appendChild(editBtn);
     head.appendChild(delBtn);
 

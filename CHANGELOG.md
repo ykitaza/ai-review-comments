@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0]
+
+### Added
+- Review comments persist again in `.ai-review/comments.json` while preview HTML
+  remains regenerated from the file on each open/reload.
+- Comment cards now support replies via `replyTo`.
+
 ## [0.3.9]
 
 ### Added

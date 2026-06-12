@@ -163,6 +163,8 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       const pos = new vscode.Position(Math.max(0, msg.line - 1), 0);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+    } else if (msg.type === "close") {
+      panel.dispose();
     } else if (msg.type === "reload") {
       panel.webview.postMessage({ type: "reload-result", boot: await createBootData() });
     } else if (msg.type === "load-comments") {
@@ -236,7 +238,7 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
         <span class="spacer"></span>
         <button id="mode-element" class="mode-btn" title="要素をクリックしてコメント">⬚ 要素</button>
         <button id="mode-text" class="mode-btn active" title="テキストをドラッグ選択してコメント">✎ テキスト</button>
-        <button id="mode-off" class="mode-btn" title="選択を無効化してページを普通に操作">✋ 操作</button>
+        <button id="mode-off" class="mode-btn" title="コメント操作を無効化し、リンク・選択・ショートカットなど通常のページ操作を優先">✋ 操作</button>
         <button id="reload-view" class="icon-btn" title="プレビューを再読み込み（リンクで遷移してしまったとき等）">⟳</button>
         <button id="open-settings" class="icon-btn" title="設定（プロンプトテンプレート）">⚙</button>
         <button id="toggle-panel" class="icon-btn" title="コメントパネルを開閉">⟩</button>
@@ -309,6 +311,7 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
     });
     window.aiReviewHost = {
       reload: () => vscode.postMessage({ type: "reload" }),
+      close: () => vscode.postMessage({ type: "close" }),
       loadComments: () => requestHost("load-comments"),
       saveComments: (comments) => requestHost("save-comments", { comments }),
     };

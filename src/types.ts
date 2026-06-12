@@ -56,6 +56,7 @@ export interface BootData {
 export type WebviewMessage =
   | { type: "copy"; text: string }
   | { type: "reveal"; line: number }
+  | { type: "close" }
   | { type: "reload" }
   | { type: "load-comments"; requestId: number }
   | { type: "save-comments"; requestId: number; comments: ReviewComment[] };

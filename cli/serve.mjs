@@ -281,7 +281,7 @@ function pageHtml(boot) {
         <span class="spacer"></span>
         <button id="mode-element" class="mode-btn" title="要素をクリックしてコメント">⬚ 要素</button>
         <button id="mode-text" class="mode-btn active" title="テキストをドラッグ選択してコメント">✎ テキスト</button>
-        <button id="mode-off" class="mode-btn" title="選択を無効化してページを普通に操作">✋ 操作</button>
+        <button id="mode-off" class="mode-btn" title="コメント操作を無効化し、リンク・選択・ショートカットなど通常のページ操作を優先">✋ 操作</button>
         <button id="reload-view" class="icon-btn" title="プレビューを再読み込み">⟳</button>
         <button id="open-settings" class="icon-btn" title="設定（プロンプトテンプレート）">⚙</button>
         <button id="toggle-panel" class="icon-btn" title="コメントパネルを開閉">⟩</button>

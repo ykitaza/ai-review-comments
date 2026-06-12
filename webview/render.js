@@ -80,7 +80,8 @@ export function makeRenderAdapter({ state, startComposer }) {
     for (const [k, id] of Object.entries(map)) {
       document.getElementById(id)?.classList.toggle("active", k === m);
     }
-    frameWrap.classList.remove("mode-element", "mode-text");
+    frameWrap.classList.remove("mode-element", "mode-text", "mode-off");
+    frameWrap.classList.add(`mode-${m}`);
     if (m === "element") frameWrap.classList.add("mode-element");
     if (m === "text") frameWrap.classList.add("mode-text");
     hideHover();
@@ -92,6 +93,7 @@ export function makeRenderAdapter({ state, startComposer }) {
     d.addEventListener("mouseleave", hideHover, true);
     d.addEventListener("click", onClick, true);
     d.addEventListener("mouseup", onMouseUp, true);
+    d.addEventListener("keydown", onFrameKeyDown, true);
     win().addEventListener("scroll", relocate, true);
     win().addEventListener("resize", relocate);
   }
@@ -192,6 +194,15 @@ export function makeRenderAdapter({ state, startComposer }) {
       },
       framePos(e)
     );
+  }
+
+  function onFrameKeyDown(e) {
+    if (mode !== "off") return;
+    const key = String(e.key || "").toLowerCase();
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && key === "w" && window.aiReviewHost?.close) {
+      e.preventDefault();
+      window.aiReviewHost.close();
+    }
   }
 
   // Nearest ancestor's source line number, for preview→source sync.

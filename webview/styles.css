@@ -235,6 +235,10 @@ html, body {
 }
 .pin.active { background: var(--accent); }
 .pin.active span { color: #fff; }
+#frame-wrap.mode-off .pin {
+  pointer-events: none;
+  opacity: 0.45;
+}
 
 /* mode hint on the iframe */
 #frame-wrap.mode-element #target,

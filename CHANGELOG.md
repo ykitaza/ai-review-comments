@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.2]
+
+### Fixed
+- Operation mode no longer lets review pins intercept page interactions, so the
+  rendered preview behaves more like a normal web page.
+- In VS Code webviews, `Cmd/Ctrl+W` from inside the preview frame now closes the
+  review tab instead of being swallowed by the iframe.
+
 ## [0.4.1]
 
 ### Changed

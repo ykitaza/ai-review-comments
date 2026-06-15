@@ -28,6 +28,9 @@ export function makeSourceAdapter({ state }) {
   let dragging = false;
   let code; // the code container
   let openWidget = null; // currently-open inline composer element
+  let findQuery = "";
+  let findMatches = [];
+  let findIndex = -1;
 
   async function mount() {
     const text = await (await fetch("/__source")).text();
@@ -364,5 +367,62 @@ export function makeSourceAdapter({ state }) {
     closeWidget();
   }
 
-  return { mount, relocate, reveal, setActive, clearSelection };
+  function find(query, direction = 1, reset = false) {
+    const oldQuery = findQuery;
+    findQuery = query || "";
+    renderFindMarks(findQuery);
+    if (!findMatches.length) {
+      findIndex = -1;
+      return { current: 0, total: 0 };
+    }
+    if (reset || oldQuery !== findQuery || findIndex < 0) {
+      findIndex = direction < 0 ? findMatches.length - 1 : 0;
+    } else {
+      findIndex = (findIndex + direction + findMatches.length) % findMatches.length;
+    }
+    activateFindMatch();
+    return { current: findIndex + 1, total: findMatches.length };
+  }
+
+  function clearFind() {
+    findQuery = "";
+    findIndex = -1;
+    renderFindMarks("");
+  }
+
+  function renderFindMarks(query) {
+    findMatches = [];
+    const needle = query.toLowerCase();
+    lineEls.forEach((row, idx) => {
+      const text = lines[idx] || "";
+      const content = row.querySelector(".src-content");
+      if (!content) return;
+      if (!needle || !text.toLowerCase().includes(needle)) {
+        content.textContent = text === "" ? "​" : text;
+        return;
+      }
+      let html = "";
+      let last = 0;
+      let pos = 0;
+      const lower = text.toLowerCase();
+      while ((pos = lower.indexOf(needle, last)) !== -1) {
+        html += escapeHtml(text.slice(last, pos));
+        html += `<mark class="find-mark">${escapeHtml(text.slice(pos, pos + query.length))}</mark>`;
+        last = pos + query.length;
+      }
+      html += escapeHtml(text.slice(last));
+      content.innerHTML = html;
+      content.querySelectorAll(".find-mark").forEach((mark) => findMatches.push(mark));
+    });
+  }
+
+  function activateFindMatch() {
+    findMatches.forEach((m) => m.classList.remove("active"));
+    const mark = findMatches[findIndex];
+    if (!mark) return;
+    mark.classList.add("active");
+    mark.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  }
+
+  return { mount, relocate, reveal, setActive, clearSelection, find, clearFind };
 }

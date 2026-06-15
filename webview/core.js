@@ -31,6 +31,10 @@ let adapter = null; // set by init()
 let pending = null; // selection awaiting a comment
 let editingId = null; // comment being edited
 let replyParentId = null; // comment being replied to
+let findBar = null;
+let findInput = null;
+let findStatus = null;
+let lastFindQuery = "";
 
 // ---------------------------------------------------------------------------
 // Comments are persisted by the host only. Preview HTML/webview state is never
@@ -144,6 +148,85 @@ export function useAdapter(next) {
 export function refresh() {
   adapter?.relocate?.();
 }
+
+// ---------------------------------------------------------------------------
+// find bar — VS Code webviews/iframes often swallow native Cmd/Ctrl+F, so the
+// review UI provides its own small search box and delegates matching to adapters.
+export function openFindBar(initialText = "") {
+  ensureFindBar();
+  findBar.classList.remove("hidden");
+  if (initialText) findInput.value = initialText;
+  findInput.focus();
+  findInput.select();
+  runFind(1, true);
+}
+
+function ensureFindBar() {
+  if (findBar) return;
+  findBar = document.createElement("div");
+  findBar.id = "find-bar";
+  findBar.className = "find-bar hidden";
+  findBar.innerHTML = `
+    <input id="find-input" type="search" placeholder="検索" autocomplete="off" />
+    <span id="find-status" class="find-status"></span>
+    <button id="find-prev" type="button" title="前を検索">↑</button>
+    <button id="find-next" type="button" title="次を検索">↓</button>
+    <button id="find-close" type="button" title="閉じる">×</button>
+  `;
+  (document.getElementById("app") || document.body).appendChild(findBar);
+  findInput = findBar.querySelector("#find-input");
+  findStatus = findBar.querySelector("#find-status");
+  findInput.addEventListener("input", () => runFind(1, true));
+  findInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      runFind(e.shiftKey ? -1 : 1, false);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeFindBar();
+    }
+  });
+  findBar.querySelector("#find-prev").addEventListener("click", () => runFind(-1, false));
+  findBar.querySelector("#find-next").addEventListener("click", () => runFind(1, false));
+  findBar.querySelector("#find-close").addEventListener("click", closeFindBar);
+}
+
+function runFind(direction, reset) {
+  if (!findInput) return;
+  const query = findInput.value.trim();
+  lastFindQuery = query;
+  const result = adapter?.find?.(query, direction, reset);
+  updateFindStatus(result);
+}
+
+function updateFindStatus(result) {
+  if (!findStatus) return;
+  if (!lastFindQuery) {
+    findStatus.textContent = "";
+  } else if (!result || result.total === 0 || result.found === false) {
+    findStatus.textContent = "一致なし";
+  } else if (Number.isFinite(result.current) && Number.isFinite(result.total)) {
+    findStatus.textContent = `${result.current} / ${result.total}`;
+  } else {
+    findStatus.textContent = "一致";
+  }
+}
+
+function closeFindBar() {
+  findBar?.classList.add("hidden");
+  adapter?.clearFind?.();
+}
+
+document.addEventListener("keydown", (e) => {
+  const key = String(e.key || "").toLowerCase();
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && key === "f") {
+    e.preventDefault();
+    openFindBar();
+  } else if (e.key === "Escape" && findBar && !findBar.classList.contains("hidden")) {
+    e.preventDefault();
+    closeFindBar();
+  }
+}, true);
 
 // ---------------------------------------------------------------------------
 // composer (shared popover). `target` is the selection descriptor the adapter

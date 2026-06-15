@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.6]
+
+### Added
+- `Cmd/Ctrl+F` opens an in-review find bar for preview and source views.
+- Source view search highlights all matches and supports next/previous navigation.
+
 ## [0.4.5]
 
 ### Added

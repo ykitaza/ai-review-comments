@@ -106,6 +106,8 @@ init((ctx) => {
     reveal: (c) => active?.reveal?.(c),
     setActive: (id) => active?.setActive?.(id),
     clearSelection: () => active?.clearSelection?.(),
+    find: (query, direction, reset) => active?.find?.(query, direction, reset),
+    clearFind: () => active?.clearFind?.(),
   };
   return controller;
 });

@@ -2,7 +2,7 @@
 // comment by clicking an element or selecting text. Produces "element" and
 // "text" comments carrying a robust CSS selector + an HTML snippet.
 
-import { truncate } from "./core.js";
+import { openFindBar, truncate } from "./core.js";
 
 export function makeRenderAdapter({ state, startComposer }) {
   const frameWrap = document.getElementById("frame-wrap");
@@ -204,8 +204,14 @@ export function makeRenderAdapter({ state, startComposer }) {
   }
 
   function onFrameKeyDown(e) {
-    if (mode !== "off") return;
     const key = String(e.key || "").toLowerCase();
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && key === "f") {
+      e.preventDefault();
+      e.stopPropagation();
+      openFindBar(selectedText());
+      return;
+    }
+    if (mode !== "off") return;
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && key === "w" && window.aiReviewHost?.close) {
       e.preventDefault();
       window.aiReviewHost.close();
@@ -344,6 +350,26 @@ export function makeRenderAdapter({ state, startComposer }) {
     } catch {}
   }
 
+  function find(query, direction = 1, reset = false) {
+    if (!query) {
+      clearFind();
+      return { current: 0, total: 0 };
+    }
+    try {
+      iframe.focus();
+      win().focus();
+      if (reset) win().getSelection()?.removeAllRanges();
+      const found = win().find(query, false, direction < 0, true, false, false, false);
+      return { found, current: Number.NaN, total: Number.NaN };
+    } catch {
+      return { found: false, current: 0, total: 0 };
+    }
+  }
+
+  function clearFind() {
+    clearSelection();
+  }
+
   // ---- CSS selector generation -------------------------------------------
   function cssPath(el) {
     if (!el || el.nodeType !== 1) return "";
@@ -413,5 +439,5 @@ export function makeRenderAdapter({ state, startComposer }) {
     return s;
   }
 
-  return { mount, relocate, reveal, setActive, clearSelection };
+  return { mount, relocate, reveal, setActive, clearSelection, find, clearFind };
 }

@@ -25,6 +25,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - Find bar input keeps focus while typing in rendered preview search.
 - Japanese IME composition in the find bar is no longer interrupted by live
   search focus restoration.
+- The collapsed-comments reopen button no longer covers the toolbar settings
+  button.
 
 ## [0.4.6]
 

@@ -530,6 +530,60 @@ html, body {
   flex: 1;
 }
 
+.comment-section {
+  list-style: none;
+  margin: 0 0 10px;
+}
+.comment-section-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 6px 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: default;
+}
+.comment-section.collapsible .comment-section-head {
+  cursor: pointer;
+}
+.comment-section.collapsible .comment-section-head:hover {
+  color: var(--text);
+}
+.comment-section-head:disabled {
+  opacity: 1;
+}
+.comment-section-caret {
+  width: 14px;
+  color: var(--accent-2);
+}
+.comment-section-title {
+  letter-spacing: 0.04em;
+}
+.comment-section-count {
+  margin-left: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+}
+.comment-section-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.comment-section-empty {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 8px 8px 14px;
+}
+
 .comment {
   background: var(--panel-2);
   border: 1px solid var(--border);

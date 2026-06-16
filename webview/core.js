@@ -35,6 +35,7 @@ let findBar = null;
 let findInput = null;
 let findStatus = null;
 let lastFindQuery = "";
+let resolvedSectionOpen = false;
 
 // ---------------------------------------------------------------------------
 // Comments are persisted by the host only. Preview HTML/webview state is never
@@ -107,6 +108,7 @@ export async function init(makeAdapter) {
   document.title = `Review — ${meta.file}`;
 
   await loadComments();
+  loadCommentListState();
   loadTemplate(); // restore the user's chosen prompt template
   loadCommonPrompt(); // restore the common prompt prepended to every output
 
@@ -316,15 +318,92 @@ els.composerInput.addEventListener("keydown", (e) => {
 
 // ---------------------------------------------------------------------------
 // comment list rendering
+const RESOLVED_SECTION_OPEN_KEY = "review:resolvedSectionOpen";
+
+function loadCommentListState() {
+  try {
+    resolvedSectionOpen = localStorage.getItem(RESOLVED_SECTION_OPEN_KEY) === "1";
+  } catch {}
+}
+
+function saveCommentListState() {
+  try {
+    localStorage.setItem(RESOLVED_SECTION_OPEN_KEY, resolvedSectionOpen ? "1" : "0");
+  } catch {}
+}
+
 export function renderComments() {
-  els.count.textContent = String(state.comments.length);
-  els.copy.disabled = state.comments.length === 0;
+  const unresolvedCount = state.comments.filter((c) => !c.resolved).length;
+  const resolvedCount = state.comments.length - unresolvedCount;
+  els.count.textContent = resolvedCount ? `${unresolvedCount}/${state.comments.length}` : String(unresolvedCount);
+  els.copy.disabled = unresolvedCount === 0;
   els.clear.disabled = state.comments.length === 0;
   els.hint.style.display = state.comments.length ? "none" : "block";
 
   els.comments.innerHTML = "";
   const { roots, replies } = threadedComments();
-  roots.forEach((c) => {
+  const unresolvedRoots = roots.filter((c) => threadHasUnresolved(c, replies));
+  const resolvedRoots = roots.filter((c) => !threadHasUnresolved(c, replies));
+
+  appendCommentSection({
+    title: "未解決",
+    count: unresolvedCount,
+    roots: unresolvedRoots,
+    replies,
+    emptyText: "未解決のコメントはありません。",
+  });
+
+  if (resolvedCount) {
+    appendCommentSection({
+      title: "解決済み",
+      count: resolvedCount,
+      roots: resolvedRoots,
+      replies,
+      collapsible: true,
+      open: resolvedSectionOpen,
+      emptyText: "解決済みのコメントはありません。",
+    });
+  }
+}
+
+function appendCommentSection({ title, count, roots, replies, collapsible = false, open = true, emptyText }) {
+  const section = document.createElement("li");
+  section.className = "comment-section" + (collapsible ? " collapsible" : "");
+
+  const head = document.createElement("button");
+  head.type = "button";
+  head.className = "comment-section-head";
+  head.disabled = !collapsible;
+  head.innerHTML = `
+    <span class="comment-section-caret">${collapsible ? (open ? "▾" : "▸") : ""}</span>
+    <span class="comment-section-title">${title}</span>
+    <span class="comment-section-count">${count}</span>
+  `;
+  if (collapsible) {
+    head.addEventListener("click", () => {
+      resolvedSectionOpen = !resolvedSectionOpen;
+      saveCommentListState();
+      renderComments();
+    });
+  }
+  section.appendChild(head);
+
+  const list = document.createElement("ul");
+  list.className = "comment-section-list";
+  if (collapsible && !open) list.hidden = true;
+  if (roots.length) {
+    roots.forEach((c) => appendThread(list, c, replies));
+  } else if (!collapsible || open) {
+    const empty = document.createElement("li");
+    empty.className = "comment-section-empty";
+    empty.textContent = emptyText;
+    list.appendChild(empty);
+  }
+  section.appendChild(list);
+  els.comments.appendChild(section);
+}
+
+function appendThread(list, c, replies) {
     const li = commentItem(c);
     const threadReplies = replies.get(c.id) || [];
     if (threadReplies.length) {
@@ -333,8 +412,11 @@ export function renderComments() {
       threadReplies.forEach((reply) => replyList.appendChild(commentItem(reply)));
       li.appendChild(replyList);
     }
-    els.comments.appendChild(li);
-  });
+    list.appendChild(li);
+}
+
+function threadHasUnresolved(c, replies) {
+  return !c.resolved || (replies.get(c.id) || []).some((reply) => !reply.resolved);
 }
 
 function commentItem(c) {

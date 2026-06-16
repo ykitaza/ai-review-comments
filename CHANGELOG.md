@@ -14,6 +14,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
   `--root <workspace>` to avoid nested Git roots resolving to the wrong comment
   store.
 - The "clear all comments" action now asks for confirmation before deleting.
+- The comments panel now separates unresolved threads from resolved threads, with
+  resolved threads collapsed by default.
 
 ## [0.4.6]
 

@@ -705,6 +705,54 @@ button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .composer-actions button { width: auto; flex: 1; margin: 0; }
 
+/* ---------------- confirmation modal ---------------- */
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.58);
+}
+.confirm-dialog {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+  padding: 18px;
+}
+.confirm-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.confirm-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+.confirm-actions button {
+  width: auto;
+  margin: 0;
+}
+.confirm-danger {
+  background: #c2412d;
+  border: 1px solid #e0644e;
+  color: #fff;
+}
+.confirm-danger:hover {
+  background: #d64d38;
+}
+
 /* ---------------- settings drawer ---------------- */
 .backdrop {
   position: fixed;

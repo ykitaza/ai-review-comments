@@ -505,17 +505,73 @@ export function setActive(id) {
 
 // ---------------------------------------------------------------------------
 // clear all
-els.clear.addEventListener("click", () => {
+els.clear.addEventListener("click", async () => {
   if (!state.comments.length) return;
-  const ok = window.confirm(
-    `このファイルのコメント ${state.comments.length} 件をすべて削除します。よろしいですか？`
-  );
+  const ok = await confirmClearComments(state.comments.length);
   if (!ok) return;
   state.comments = [];
   save();
   renderComments();
   adapter?.relocate?.();
 });
+
+function confirmClearComments(count) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "confirm-backdrop";
+
+    const dialog = document.createElement("div");
+    dialog.className = "confirm-dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "clear-confirm-title");
+
+    const title = document.createElement("h2");
+    title.id = "clear-confirm-title";
+    title.textContent = "コメントをすべて削除しますか？";
+
+    const message = document.createElement("p");
+    message.className = "confirm-message";
+    message.textContent = `このファイルのコメント ${count} 件を削除します。この操作は元に戻せません。`;
+
+    const actions = document.createElement("div");
+    actions.className = "confirm-actions";
+
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "ghost";
+    cancel.textContent = "キャンセル";
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "confirm-danger";
+    remove.textContent = "削除する";
+
+    actions.appendChild(cancel);
+    actions.appendChild(remove);
+    dialog.appendChild(title);
+    dialog.appendChild(message);
+    dialog.appendChild(actions);
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
+
+    const done = (ok) => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      backdrop.remove();
+      resolve(ok);
+    };
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") done(false);
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) done(false);
+    });
+    cancel.addEventListener("click", () => done(false));
+    remove.addEventListener("click", () => done(true));
+    setTimeout(() => cancel.focus(), 0);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // copy → AI prompt

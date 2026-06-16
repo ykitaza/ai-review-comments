@@ -23,6 +23,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 - Find bar input keeps focus while typing in rendered preview search.
+- Japanese IME composition in the find bar is no longer interrupted by live
+  search focus restoration.
 
 ## [0.4.6]
 

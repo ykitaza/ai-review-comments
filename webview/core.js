@@ -35,6 +35,7 @@ let findBar = null;
 let findInput = null;
 let findStatus = null;
 let lastFindQuery = "";
+let findComposing = false;
 const commentSectionOpen = { open: true, closed: false };
 
 // ---------------------------------------------------------------------------
@@ -179,8 +180,21 @@ function ensureFindBar() {
   (document.getElementById("app") || document.body).appendChild(findBar);
   findInput = findBar.querySelector("#find-input");
   findStatus = findBar.querySelector("#find-status");
-  findInput.addEventListener("input", () => runFind(1, true));
+  findInput.addEventListener("compositionstart", () => {
+    findComposing = true;
+  });
+  findInput.addEventListener("compositionend", () => {
+    findComposing = false;
+    setTimeout(() => {
+      if (!findComposing) runFind(1, true);
+    }, 0);
+  });
+  findInput.addEventListener("input", (e) => {
+    if (findComposing || e.isComposing) return;
+    runFind(1, true);
+  });
   findInput.addEventListener("keydown", (e) => {
+    if (findComposing || e.isComposing || e.keyCode === 229) return;
     if (e.key === "Enter") {
       e.preventDefault();
       runFind(e.shiftKey ? -1 : 1, false);

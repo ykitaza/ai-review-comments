@@ -17,6 +17,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - The comments panel now separates Open and Closed threads. Closed starts
   collapsed, and Open can also be collapsed when needed.
 
+### Changed
+- README screenshots and AI collaboration docs now show the current Open/Closed
+  UI, AI replies, and resolved notes.
+
 ## [0.4.6]
 
 ### Added

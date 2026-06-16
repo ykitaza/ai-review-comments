@@ -5,8 +5,9 @@
 // Usage: node scripts/make-demo-harness.mjs <scenario> <file> <out.html>
 //   scenario: "flow"   — comment in preview → Copy → show clipboard → paste to a mock AI chat
 //             "toggle" — preview ⇄ source toggle, with a source-line comment
+//             "ai"     — show Open/Closed threads, AI replies, and resolved notes
 import { readFile, writeFile } from "node:fs/promises";
-import { injectLineNumbers } from "/tmp/r.mjs";
+import { injectLineNumbers } from "../shared/render.mjs";
 
 const scenario = process.argv[2] || "flow";
 const file = process.argv[3] || "examples/landing.html";
@@ -19,6 +20,9 @@ const boot = {
     file: file.split("/").pop(),
     path: "/abs/" + file.split("/").pop(),
     dir: "/abs",
+    workspaceRoot: "/abs/workspace",
+    storePath: "/abs/workspace/.ai-review/comments.json",
+    storeKey: file.split("/").pop(),
     previewKind: "html",
     defaultView: "preview",
     lang: "html",
@@ -69,12 +73,14 @@ const SHELL = `
 <div id="app"><main id="stage"><div id="toolbar"><span id="file-label">…</span>
 <div id="view-toggle" class="seg" hidden><button id="view-preview" class="seg-btn">👁 Preview</button><button id="view-source" class="seg-btn">&lt;&gt; Source</button></div>
 <span class="spacer"></span><button id="mode-element" class="mode-btn">⬚ Element</button><button id="mode-text" class="mode-btn active">✎ Text</button><button id="mode-off" class="mode-btn">✋ Off</button>
-<button id="open-settings" class="icon-btn">⚙</button><button id="toggle-panel" class="icon-btn">⟩</button></div><div id="frame-wrap"></div></main>
-<div id="resizer"></div><aside id="panel"><header><h1>Comments</h1><span id="count" class="badge">0</span><span class="spacer"></span><button id="collapse-panel" class="icon-btn">⟩</button></header>
-<div id="hint" class="hint">Click an element / line or drag a range on the left to add a comment.</div><ul id="comments"></ul>
-<footer><button id="copy" class="primary" disabled>📋 Copy AI prompt</button><button id="clear" class="ghost" disabled>Clear all</button><div id="copied-toast" class="toast">Copied</div></footer></aside></div>
-<button id="show-panel" class="show-panel hidden">⟨ Comments</button>
-<div id="settings" class="drawer hidden"><div class="drawer-head"><h2>Settings</h2><button id="settings-close" class="icon-btn">✕</button></div><div class="drawer-body"><label class="field-label">t</label><select id="template-select"></select><p class="field-help">h</p><label class="field-label">b</label><textarea id="template-body" rows="10"></textarea><div class="field-vars">v</div><div class="drawer-actions"><button id="template-reset" class="ghost">r</button><button id="template-save" class="primary">s</button></div><div class="drawer-preview-wrap"><label class="field-label">p</label><pre id="template-preview" class="drawer-preview"></pre></div></div></div>
+<button id="reload-view" class="icon-btn">⟳</button><button id="open-settings" class="icon-btn">⚙</button><button id="toggle-panel" class="icon-btn">⟩</button></div><div id="frame-wrap"></div></main>
+<div id="resizer"></div><aside id="panel"><header><h1>コメント</h1><span id="count" class="badge">0</span><span class="spacer"></span><button id="collapse-panel" class="icon-btn">⟩</button></header>
+<div id="hint" class="hint">左の要素や行をクリック、または範囲をドラッグするとコメントを追加できます。</div><ul id="comments"></ul>
+<footer><button id="copy" class="primary" disabled>📋 AIプロンプトをコピー</button><button id="clear" class="ghost" disabled>すべて削除</button><div id="copied-toast" class="toast">コピーしました</div></footer></aside></div>
+<button id="show-panel" class="show-panel hidden">⟨ コメント</button>
+<div id="settings" class="drawer hidden"><div class="drawer-head"><h2>設定 — AIプロンプトテンプレート</h2><button id="settings-close" class="icon-btn">✕</button></div><div class="drawer-body">
+<label class="field-label">共通プロンプト</label><p class="field-help">すべてのAIプロンプトの先頭に入る共通コンテキストです。</p><textarea id="common-prompt-body" rows="9"></textarea><div class="field-vars">v</div><div class="drawer-actions"><button id="common-prompt-reset" class="ghost">r</button><button id="common-prompt-save" class="primary">s</button></div>
+<label class="field-label">個別テンプレート</label><select id="template-select"></select><p class="field-help">h</p><label class="field-label">個別プロンプト本文</label><textarea id="template-body" rows="10"></textarea><div class="field-vars">v</div><div class="drawer-actions"><button id="template-reset" class="ghost">r</button><button id="template-save" class="primary">s</button></div><div class="drawer-preview-wrap"><label class="field-label">p</label><pre id="template-preview" class="drawer-preview"></pre></div></div></div>
 <div id="settings-backdrop" class="backdrop hidden"></div>
 <div id="composer" class="composer hidden"><div class="composer-target" id="composer-target"></div><textarea id="composer-input" rows="3" placeholder="Write your note / revision request…"></textarea><div class="composer-actions"><button id="composer-cancel" class="ghost">Cancel</button><button id="composer-save" class="primary">Add</button></div></div>
 <div id="demo-cursor"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 2 L3 20 L8 15 L11 22 L14 21 L11 14 L18 14 Z" fill="#fff" stroke="#222" stroke-width="1.2"/></svg></div>
@@ -98,6 +104,13 @@ const BRIDGE = `
   window.__CLIP = "";
   if(!navigator.clipboard)navigator.clipboard={};
   navigator.clipboard.writeText=(t)=>{ window.__CLIP = t; return Promise.resolve(); };
+  window.aiReviewHost = {
+    reload: () => {},
+    close: () => {},
+    copyText: (text) => navigator.clipboard.writeText(text),
+    loadComments: async () => [],
+    saveComments: async (comments) => { window.__COMMENTS = comments; },
+  };
 `;
 
 const HELPERS = `
@@ -187,7 +200,60 @@ const TOGGLE = `
   })();
 `;
 
-const SCRIPT = scenario === "toggle" ? TOGGLE : FLOW;
+const AI = `
+  ${HELPERS}
+  window.__DEMO_DONE = false;
+  (async () => {
+    await waitFrame();
+    const comments = [
+      {
+        id: 1,
+        kind: "element",
+        selector: "header.hero > a.btn",
+        srcLine: 35,
+        snippet: '<a href="#" class="btn">無料で始める</a>',
+        body: "CTAの文言を、ユーザーが得られる価値が伝わる表現にしたい",
+      },
+      {
+        id: 2,
+        kind: "lines",
+        line: 48,
+        selector: "L48",
+        snippet: "<h3>その場でコメント</h3>",
+        body: "「その場」が何を指すか少し曖昧です。具体化できますか？",
+      },
+      {
+        id: 3,
+        kind: "lines",
+        line: 48,
+        selector: "L48",
+        snippet: "<h3>その場でコメント</h3>",
+        body: "「レンダリング上に直接コメント」に変更するのがよさそうです。",
+        author: "ai",
+        replyTo: 2,
+      },
+      {
+        id: 4,
+        kind: "element",
+        selector: "header.hero > h1",
+        srcLine: 33,
+        snippet: "<h1>AI Review Comments</h1>",
+        body: "サービス名だけだと価値が伝わりにくい",
+        resolved: true,
+        resolutionNote: "見出しに「見た目からAI修正へ」を追加",
+      },
+    ];
+    window.dispatchEvent(new CustomEvent("ai-review:comments-updated", { detail: comments }));
+    await sleep(600);
+    document.querySelector(".comment-section:nth-child(2) .comment-section-head")?.click();
+    await sleep(900);
+    document.querySelector(".comment-section:nth-child(2) .comment-section-head")?.click();
+    await sleep(1200);
+    window.__DEMO_DONE = true;
+  })();
+`;
+
+const SCRIPT = scenario === "toggle" ? TOGGLE : scenario === "ai" ? AI : FLOW;
 
 const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
 <link rel="stylesheet" href="${a("styles.css")}">

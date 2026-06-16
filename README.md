@@ -135,6 +135,11 @@ npx -y github:ykitaza/ai-review-comments resolve docs/design.md 1 \
 想定ループ: **人間がパネルでコメント → AI が `pending` で読んで修正
 （`stale` で位置ズレも検知）→ `resolve --note` で対応内容を残す／曖昧なら
 `add --reply-to` で質問 → パネルに即反映**。
+AI の返信は AI バッジ付きでスレッドに表示され、対応済みになったコメントは
+Closed に移動して折りたたまれます。Open だけを見れば、いま対応すべき指摘に
+集中できます。
+
+![AIの返信とClosedコメント](media/ai-collaboration.png)
 
 Claude Code 用のスキル定義を [`skills/ai-review/`](skills/ai-review/SKILL.md) に
 同梱しています。エージェントにこのスキルを与えると、上記のループを自走できます。

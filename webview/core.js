@@ -35,7 +35,7 @@ let findBar = null;
 let findInput = null;
 let findStatus = null;
 let lastFindQuery = "";
-let resolvedSectionOpen = false;
+const commentSectionOpen = { open: true, closed: false };
 
 // ---------------------------------------------------------------------------
 // Comments are persisted by the host only. Preview HTML/webview state is never
@@ -318,17 +318,19 @@ els.composerInput.addEventListener("keydown", (e) => {
 
 // ---------------------------------------------------------------------------
 // comment list rendering
-const RESOLVED_SECTION_OPEN_KEY = "review:resolvedSectionOpen";
+const COMMENT_SECTION_OPEN_KEY = "review:commentSectionOpen";
 
 function loadCommentListState() {
   try {
-    resolvedSectionOpen = localStorage.getItem(RESOLVED_SECTION_OPEN_KEY) === "1";
+    const saved = JSON.parse(localStorage.getItem(COMMENT_SECTION_OPEN_KEY) || "{}");
+    if (typeof saved.open === "boolean") commentSectionOpen.open = saved.open;
+    if (typeof saved.closed === "boolean") commentSectionOpen.closed = saved.closed;
   } catch {}
 }
 
 function saveCommentListState() {
   try {
-    localStorage.setItem(RESOLVED_SECTION_OPEN_KEY, resolvedSectionOpen ? "1" : "0");
+    localStorage.setItem(COMMENT_SECTION_OPEN_KEY, JSON.stringify(commentSectionOpen));
   } catch {}
 }
 
@@ -341,59 +343,60 @@ export function renderComments() {
   els.hint.style.display = state.comments.length ? "none" : "block";
 
   els.comments.innerHTML = "";
+  if (!state.comments.length) return;
+
   const { roots, replies } = threadedComments();
   const unresolvedRoots = roots.filter((c) => threadHasUnresolved(c, replies));
   const resolvedRoots = roots.filter((c) => !threadHasUnresolved(c, replies));
 
   appendCommentSection({
-    title: "未解決",
+    key: "open",
+    title: "Open",
     count: unresolvedCount,
     roots: unresolvedRoots,
     replies,
-    emptyText: "未解決のコメントはありません。",
+    open: commentSectionOpen.open,
+    emptyText: "Open コメントはありません。",
   });
 
   if (resolvedCount) {
     appendCommentSection({
-      title: "解決済み",
+      key: "closed",
+      title: "Closed",
       count: resolvedCount,
       roots: resolvedRoots,
       replies,
-      collapsible: true,
-      open: resolvedSectionOpen,
-      emptyText: "解決済みのコメントはありません。",
+      open: commentSectionOpen.closed,
+      emptyText: "Closed コメントはありません。",
     });
   }
 }
 
-function appendCommentSection({ title, count, roots, replies, collapsible = false, open = true, emptyText }) {
+function appendCommentSection({ key, title, count, roots, replies, open, emptyText }) {
   const section = document.createElement("li");
-  section.className = "comment-section" + (collapsible ? " collapsible" : "");
+  section.className = "comment-section collapsible";
 
   const head = document.createElement("button");
   head.type = "button";
   head.className = "comment-section-head";
-  head.disabled = !collapsible;
   head.innerHTML = `
-    <span class="comment-section-caret">${collapsible ? (open ? "▾" : "▸") : ""}</span>
+    <span class="comment-section-caret">${open ? "▾" : "▸"}</span>
     <span class="comment-section-title">${title}</span>
     <span class="comment-section-count">${count}</span>
   `;
-  if (collapsible) {
-    head.addEventListener("click", () => {
-      resolvedSectionOpen = !resolvedSectionOpen;
-      saveCommentListState();
-      renderComments();
-    });
-  }
+  head.addEventListener("click", () => {
+    commentSectionOpen[key] = !commentSectionOpen[key];
+    saveCommentListState();
+    renderComments();
+  });
   section.appendChild(head);
 
   const list = document.createElement("ul");
   list.className = "comment-section-list";
-  if (collapsible && !open) list.hidden = true;
+  if (!open) list.hidden = true;
   if (roots.length) {
     roots.forEach((c) => appendThread(list, c, replies));
-  } else if (!collapsible || open) {
+  } else if (open) {
     const empty = document.createElement("li");
     empty.className = "comment-section-empty";
     empty.textContent = emptyText;

@@ -197,9 +197,19 @@ function ensureFindBar() {
 function runFind(direction, reset) {
   if (!findInput) return;
   const query = findInput.value.trim();
+  const selectionStart = findInput.selectionStart;
+  const selectionEnd = findInput.selectionEnd;
   lastFindQuery = query;
   const result = adapter?.find?.(query, direction, reset);
   updateFindStatus(result);
+  if (!findBar?.classList.contains("hidden") && document.activeElement !== findInput) {
+    findInput.focus({ preventScroll: true });
+    if (selectionStart != null && selectionEnd != null) {
+      try {
+        findInput.setSelectionRange(selectionStart, selectionEnd);
+      } catch {}
+    }
+  }
 }
 
 function updateFindStatus(result) {

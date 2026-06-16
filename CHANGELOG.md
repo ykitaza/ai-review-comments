@@ -21,6 +21,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 - README screenshots and AI collaboration docs now show the current Open/Closed
   UI, AI replies, and resolved notes.
 
+### Fixed
+- Find bar input keeps focus while typing in rendered preview search.
+
 ## [0.4.6]
 
 ### Added

@@ -10,6 +10,9 @@ export interface ReviewMeta {
   file: string; // basename
   path: string; // absolute path
   dir: string; // containing directory
+  workspaceRoot?: string; // workspace/comment-store root when known
+  storePath?: string; // absolute path to .ai-review/comments.json when known
+  storeKey?: string; // workspace-relative store key when known
   previewKind: PreviewKind;
   defaultView: ViewMode;
   lang: string; // source-viewer language hint (json/yaml/markdown/…)

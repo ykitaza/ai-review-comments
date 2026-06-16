@@ -2,11 +2,15 @@
 // Wired up once at boot; independent of which view adapter is active.
 
 import {
+  DEFAULT_COMMON_PROMPT_BODY,
   TEMPLATE_PRESETS,
+  commonPrompt,
   template,
+  saveCommonPrompt,
   saveTemplate,
+  currentCommonPromptBody,
   currentTemplateBody,
-  formatComments,
+  composePrompt,
   state,
 } from "./core.js";
 
@@ -108,6 +112,9 @@ function setupDrawer() {
   const backdrop = document.getElementById("settings-backdrop");
   const openBtn = document.getElementById("open-settings");
   const closeBtn = document.getElementById("settings-close");
+  const commonBody = document.getElementById("common-prompt-body");
+  const commonSaveBtn = document.getElementById("common-prompt-save");
+  const commonResetBtn = document.getElementById("common-prompt-reset");
   const sel = document.getElementById("template-select");
   const body = document.getElementById("template-body");
   const preview = document.getElementById("template-preview");
@@ -121,6 +128,7 @@ function setupDrawer() {
   sel.appendChild(new Option("カスタム", "custom"));
 
   function syncFromState() {
+    commonBody.value = currentCommonPromptBody();
     sel.value = template.key;
     body.value = currentTemplateBody();
     refreshPreview();
@@ -128,13 +136,8 @@ function setupDrawer() {
 
   function refreshPreview() {
     // preview using the textarea's current content against current comments
-    const tpl = body.value;
-    const list = state.comments;
-    const fullPath = state.meta.path || state.meta.file || "the file";
-    preview.textContent = tpl
-      .replace(/\{\{\s*file\s*\}\}/g, fullPath)
-      .replace(/\{\{\s*count\s*\}\}/g, String(list.length))
-      .replace(/\{\{\s*comments\s*\}\}/g, list.length ? formatComments(list) : "（コメントなし）");
+    const list = state.comments.filter((c) => !c.resolved);
+    preview.textContent = composePrompt(commonBody.value, body.value, list, "（コメントなし）");
   }
 
   function open() {
@@ -158,7 +161,22 @@ function setupDrawer() {
     refreshPreview();
   });
 
+  commonBody.addEventListener("input", refreshPreview);
   body.addEventListener("input", refreshPreview);
+
+  commonSaveBtn.addEventListener("click", () => {
+    commonPrompt.body = commonBody.value === DEFAULT_COMMON_PROMPT_BODY ? null : commonBody.value;
+    saveCommonPrompt();
+    refreshPreview();
+    flash(commonSaveBtn, "保存しました");
+  });
+
+  commonResetBtn.addEventListener("click", () => {
+    commonPrompt.body = null;
+    commonBody.value = currentCommonPromptBody();
+    saveCommonPrompt();
+    refreshPreview();
+  });
 
   saveBtn.addEventListener("click", () => {
     // editing always becomes "custom" unless it still equals the preset

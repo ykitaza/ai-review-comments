@@ -11,7 +11,7 @@ import { resolve, dirname, extname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { renderPreview, previewKindFor, langFor } from "../shared/render.mjs";
-import { findRoot, keyFor, readStoreSync, storePathFor, writeStoreSync } from "../shared/store.mjs";
+import { findRoot, keyFor, readStoreSync, rootForStorePath, storePathFor, writeStoreSync } from "../shared/store.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEBVIEW_DIR = existsSync(resolve(__dirname, "..", "webview"))
@@ -54,7 +54,7 @@ function safeJoin(root, urlPath) {
   return joined;
 }
 
-export async function serve({ file, port = 4900, open = true, keepAlive = false }) {
+export async function serve({ file, port = 4900, open = true, keepAlive = false, root: rootOption, store }) {
   const targetPath = resolve(process.cwd(), file);
   try {
     const s = await stat(targetPath);
@@ -64,7 +64,13 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
     process.exit(1);
   }
 
-  const root = findRoot(dirname(targetPath));
+  const explicitStorePath = store ? resolve(store) : null;
+  const root = explicitStorePath
+    ? rootForStorePath(explicitStorePath)
+    : rootOption
+      ? resolve(rootOption)
+      : findRoot(dirname(targetPath));
+  const commentStorePath = explicitStorePath ?? storePathFor(root);
   const key = keyFor(root, targetPath);
   const targetDir = dirname(targetPath);
   const previewKind = previewKindFor(targetPath);
@@ -72,6 +78,9 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
     file: key.split("/").pop(),
     path: targetPath,
     dir: targetDir,
+    workspaceRoot: root,
+    storePath: commentStorePath,
+    storeKey: key,
     previewKind,
     defaultView: previewKind === "none" ? "source" : "preview",
     lang: langFor(targetPath),
@@ -87,12 +96,12 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
       loadedAt: new Date().toISOString(),
     };
   };
-  const commentsForFile = () => readStoreSync(root).files[key]?.comments ?? [];
+  const commentsForFile = () => readStoreSync(root, commentStorePath).files[key]?.comments ?? [];
   const writeCommentsForFile = (comments) => {
-    const store = readStoreSync(root);
-    if (comments.length) store.files[key] = { comments };
-    else delete store.files[key];
-    writeStoreSync(root, store);
+    const nextStore = readStoreSync(root, commentStorePath);
+    if (comments.length) nextStore.files[key] = { comments };
+    else delete nextStore.files[key];
+    writeStoreSync(root, nextStore, commentStorePath);
   };
 
   // deferred shutdown: tab close schedules an exit; any new request cancels it
@@ -114,8 +123,8 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false 
   };
   const fileWatcher = watch(targetPath, { persistent: false }, notifyChanged);
   let storeWatcher = null;
-  if (existsSync(storePathFor(root))) {
-    storeWatcher = watch(storePathFor(root), { persistent: false }, () => {
+  if (existsSync(commentStorePath)) {
+    storeWatcher = watch(commentStorePath, { persistent: false }, () => {
       for (const client of eventClients) client.write("event: comments\ndata: {}\n\n");
     });
   }
@@ -310,12 +319,17 @@ function pageHtml(boot) {
   <div id="settings" class="drawer hidden">
     <div class="drawer-head"><h2>設定 — AIプロンプトテンプレート</h2><button id="settings-close" class="icon-btn" title="閉じる">✕</button></div>
     <div class="drawer-body">
-      <label class="field-label">テンプレート</label>
+      <label class="field-label">共通プロンプト</label>
+      <p class="field-help">すべてのAIプロンプトの先頭に入る共通コンテキストです。作業ルートやコメントストアなど、個別指示から独立した情報を管理します。</p>
+      <textarea id="common-prompt-body" rows="9" spellcheck="false"></textarea>
+      <div class="field-vars">変数: <code>{{file}}</code> <code>{{dir}}</code> <code>{{workspace}}</code> <code>{{store}}</code> <code>{{storeKey}}</code> <code>{{count}}</code> <code>{{comments}}</code></div>
+      <div class="drawer-actions"><button id="common-prompt-reset" class="ghost">共通プロンプトを既定に戻す</button><button id="common-prompt-save" class="primary">共通プロンプトを保存</button></div>
+      <label class="field-label">個別テンプレート</label>
       <select id="template-select"></select>
       <p class="field-help">プロンプトの口調・目的を選びます。本文を編集すると「カスタム」として保存されます。</p>
-      <label class="field-label">本文テンプレート</label>
+      <label class="field-label">個別プロンプト本文</label>
       <textarea id="template-body" rows="10" spellcheck="false"></textarea>
-      <div class="field-vars">変数: <code>{{file}}</code> <code>{{comments}}</code> <code>{{count}}</code></div>
+      <div class="field-vars">変数: <code>{{file}}</code> <code>{{dir}}</code> <code>{{workspace}}</code> <code>{{store}}</code> <code>{{storeKey}}</code> <code>{{comments}}</code> <code>{{count}}</code></div>
       <div class="drawer-actions"><button id="template-reset" class="ghost">プリセットに戻す</button><button id="template-save" class="primary">保存</button></div>
       <div class="drawer-preview-wrap"><label class="field-label">プレビュー</label><pre id="template-preview" class="drawer-preview"></pre></div>
     </div>

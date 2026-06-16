@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { spawn } from "node:child_process";
 import type { BootData, ReviewMeta, WebviewMessage } from "./types.js";
 import { previewKindFor, langFor, renderPreview } from "./render/index.js";
-import { readComments, storeKeyFor, workspaceRootFor, writeComments } from "./store.js";
+import { readComments, storeKeyFor, storeUri, workspaceRootFor, writeComments } from "./store.js";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -97,6 +97,9 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       file: fileName,
       path: fsPath,
       dir: path.dirname(fsPath),
+      workspaceRoot: root?.fsPath,
+      storePath: root ? storeUri(root).fsPath : undefined,
+      storeKey,
       previewKind,
       defaultView: previewKind === "none" ? "source" : "preview",
       lang: langFor(fsPath),
@@ -269,12 +272,17 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
   <div id="settings" class="drawer hidden">
     <div class="drawer-head"><h2>設定 — AIプロンプトテンプレート</h2><button id="settings-close" class="icon-btn" title="閉じる">✕</button></div>
     <div class="drawer-body">
-      <label class="field-label">テンプレート</label>
+      <label class="field-label">共通プロンプト</label>
+      <p class="field-help">すべてのAIプロンプトの先頭に入る共通コンテキストです。作業ルートやコメントストアなど、個別指示から独立した情報を管理します。</p>
+      <textarea id="common-prompt-body" rows="9" spellcheck="false"></textarea>
+      <div class="field-vars">変数: <code>{{file}}</code> <code>{{dir}}</code> <code>{{workspace}}</code> <code>{{store}}</code> <code>{{storeKey}}</code> <code>{{count}}</code> <code>{{comments}}</code></div>
+      <div class="drawer-actions"><button id="common-prompt-reset" class="ghost">共通プロンプトを既定に戻す</button><button id="common-prompt-save" class="primary">共通プロンプトを保存</button></div>
+      <label class="field-label">個別テンプレート</label>
       <select id="template-select"></select>
       <p class="field-help">プロンプトの口調・目的を選びます。本文を編集すると「カスタム」として保存されます。</p>
-      <label class="field-label">本文テンプレート</label>
+      <label class="field-label">個別プロンプト本文</label>
       <textarea id="template-body" rows="10" spellcheck="false"></textarea>
-      <div class="field-vars">変数: <code>{{file}}</code> <code>{{comments}}</code> <code>{{count}}</code></div>
+      <div class="field-vars">変数: <code>{{file}}</code> <code>{{dir}}</code> <code>{{workspace}}</code> <code>{{store}}</code> <code>{{storeKey}}</code> <code>{{comments}}</code> <code>{{count}}</code></div>
       <div class="drawer-actions"><button id="template-reset" class="ghost">プリセットに戻す</button><button id="template-save" class="primary">保存</button></div>
       <div class="drawer-preview-wrap"><label class="field-label">プレビュー</label><pre id="template-preview" class="drawer-preview"></pre></div>
     </div>

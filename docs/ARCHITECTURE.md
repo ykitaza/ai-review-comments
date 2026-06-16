@@ -13,7 +13,7 @@ host** (Node, TypeScript) and the **webview UI** (browser-context JS).
 │   index.ts           previewKindFor / langFor / renderPreview dispatch                       │
 │ types.ts            shared types: ReviewMeta, ReviewComment, BootData, WebviewMessage         │
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
-                │  BootData {meta, source, saved, previewHtml}  +  a fetch/localStorage/clipboard shim
+                │  BootData {meta, source, previewHtml}  +  fetch/comment-store/clipboard host shims
                 ▼
 ┌───────────────────────────── webview UI (webview/, plain ESM) ───────────────────────────────┐
 │ boot.js     controller: owns Preview + Source views, the toggle, settings, resize            │
@@ -68,10 +68,19 @@ core when switching. Adding a new previewable format = one new adapter + a
 
 1. User clicks in a view → the adapter builds a *target* descriptor
    (`selector` / `line` / `mdLine` / `srcLine` / data `path` / `snippet`).
-2. `core.addComment()` stores it, persists (`save()` → localStorage shim → host
-   `workspaceState`), and re-renders the panel.
+2. `core.addComment()` stores it, persists (`save()` →
+   `aiReviewHost.saveComments()` → `.ai-review/comments.json`), and re-renders
+   the panel.
 3. **Copy** fills the active template's `{{comments}}` with each comment's
    locator + note and posts the text to the host clipboard.
+
+Copied prompts are composed from an independently editable common prompt plus
+the selected task-specific template. The common prompt uses `BootData.meta`
+(`path`, `dir`, `workspaceRoot`, `storePath`, `storeKey`) so agents can locate
+`.ai-review/comments.json` even when they are launched from a different CWD.
+The CLI mirrors this with `--store <comments.json>` and `--root <workspace>` so
+callers can bypass auto-discovery when a reviewed file lives inside a nested Git
+repository.
 
 ## Build
 

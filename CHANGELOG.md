@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- AI prompts now prepend an independently editable common prompt with target
+  file, workspace root, comment-store path, and store key metadata.
+- The `ai-review prompt` CLI output includes the same comment-store metadata so
+  agents can work from the correct store even when launched from another CWD.
+- The CLI and browser server now support `--store <comments.json>` and
+  `--root <workspace>` to avoid nested Git roots resolving to the wrong comment
+  store.
+- The "clear all comments" action now asks for confirmation before deleting.
+
 ## [0.4.6]
 
 ### Added

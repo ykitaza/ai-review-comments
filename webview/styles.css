@@ -778,6 +778,7 @@ button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
   font: inherit;
   font-size: 13.5px;
 }
+#common-prompt-body,
 #template-body {
   width: 100%;
   background: var(--bg);
@@ -790,6 +791,7 @@ button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
   line-height: 1.5;
   resize: vertical;
 }
+#common-prompt-body:focus,
 #template-body:focus { outline: none; border-color: var(--accent); }
 .drawer-actions {
   display: flex;

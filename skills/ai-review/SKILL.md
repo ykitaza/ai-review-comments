@@ -26,12 +26,18 @@ npx -y github:ykitaza/ai-review-comments <command>
 
 ## 手順
 
-1. **やることリストを取得する** — `pending` が最適（未対応コメントのみ、
+1. **作業ルートとコメントストアを確認する** — ユーザーのプロンプトに
+   `AI Review Comments 共通コンテキスト` が含まれている場合は、そこに記載された
+   `作業ルート`、`コメントストア`、`コメントストア内キー`、`レビュー対象ファイル` を
+   最優先で使う。CWD が別ディレクトリの場合や、対象ファイル配下にネストした
+   `.git/` がある場合は、CLI に `--store "<コメントストア>"` を必ず付ける。
+
+2. **やることリストを取得する** — `pending` が最適（未対応コメントのみ、
    全ファイル横断、JSON）:
 
    ```bash
-   ai-review pending          # 全ワークスペースの未対応コメント
-   ai-review pending <file>   # 特定ファイルのみ
+   ai-review --store "<comments-json-path>" pending "<absolute-file-path>" # 特定ファイルのみ（推奨）
+   ai-review pending                                           # CWD が作業ルートのときだけ全ワークスペース
    ```
 
    各コメントには位置情報が付いています:
@@ -44,25 +50,28 @@ npx -y github:ykitaza/ai-review-comments <command>
      鵜呑みにしてはいけない**。`snippet` と指摘の意図から現在の該当箇所を
      探して適用すること。
 
-2. **修正を適用する** — 位置情報と `body`（指摘）に従って対象ファイルを編集する。
+3. **修正を適用する** — 位置情報と `body`（指摘）に従って対象ファイルを編集する。
    `stale: true` のコメントは必ず現状のファイルを読んで位置を再特定する。
 
-3. **対応済みにする** — 対応したら `--note` で**何をしたかを添えて** resolve する
+4. **対応済みにする** — 対応したら `--note` で**何をしたかを添えて** resolve する
    （パネルに ✓ と対応メモが表示され、以後のプロンプトから除外される）:
 
    ```bash
-   ai-review resolve <file> <id> --note "ボタン文言を「30秒で無料登録」に変更"
+   ai-review --store "<comments-json-path>" resolve "<absolute-file-path>" <id> --note "ボタン文言を「30秒で無料登録」に変更"
    ```
 
-4. **質問・提案を返す（任意）** — 指摘が曖昧なときは、元コメントに紐付けて
+5. **質問・提案を返す（任意）** — 指摘が曖昧なときは、元コメントに紐付けて
    質問できる（パネルに AI バッジ + ↪ 返信マーカー付きで表示される）:
 
    ```bash
-   ai-review add <file> --line 42 --body "Aの意味とBの意味どちらですか？" --author ai --reply-to 3
+   ai-review --store "<comments-json-path>" add "<absolute-file-path>" --line 42 --body "Aの意味とBの意味どちらですか？" --author ai --reply-to 3
    ```
 
 ## 注意
 
 - コメントの `id` はファイルごとに独立。resolve/remove には `pending`/`json` で確認した id を使う。
 - 人間のコメントを勝手に `remove` しない。対応したら `resolve --note` を使う。
-- ストアの場所は CWD から `.ai-review/` または `.git/` を上方向に探索して決まる。
+- ファイル引数なしのコマンドは CWD から `.ai-review/` または `.git/` を上方向に探索するため、
+  CWD が不明なときは使わない。
+- ネストした Git リポジトリでは自動探索が別のストアを指すことがあるため、共通コンテキストに
+  `コメントストア` がある場合は `--store` を付ける。

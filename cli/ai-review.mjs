@@ -16,6 +16,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import {
   findRoot,
+  rootForStorePath,
   storePathFor,
   readStoreSync,
   writeStoreSync,
@@ -50,6 +51,21 @@ function formatComment(c, key) {
   return out.join("\n");
 }
 
+function formatCommonPrompt(key) {
+  const filePath = resolve(root, key);
+  return [
+    "## AI Review Comments 共通コンテキスト",
+    `- レビュー対象ファイル: \`${filePath}\``,
+    `- 対象ディレクトリ: \`${dirname(filePath)}\``,
+    `- 作業ルート: \`${root}\``,
+    `- コメントストア: \`${storePath}\``,
+    `- コメントストア内キー: \`${key}\``,
+    "",
+    "AI Review Comments のレビューコメントを処理する場合は、カレントディレクトリに依存せず、上記の作業ルートとコメントストアを基準にしてください。",
+    `コメント確認・対応済み化には、可能なら \`--store "${storePath}"\` と対象ファイルの絶対パスを渡して \`ai-review --store "${storePath}" pending "${filePath}"\` / \`ai-review --store "${storePath}" resolve "${filePath}" <id> --note "..."\` を使ってください。`,
+  ].join("\n");
+}
+
 function parseFlags(args) {
   const flags = {};
   const rest = [];
@@ -61,6 +77,8 @@ function parseFlags(args) {
     else if (a === "--author") flags.author = args[++i];
     else if (a === "--note") flags.note = args[++i];
     else if (a === "--reply-to") flags.replyTo = Number(args[++i]);
+    else if (a === "--root") flags.root = args[++i];
+    else if (a === "--store") flags.store = args[++i];
     else if (a === "--port" || a === "-p") flags.port = Number(args[++i]);
     else if (a === "--no-open") flags.noOpen = true;
     else if (a === "--keep-alive") flags.keepAlive = true;
@@ -91,8 +109,10 @@ function isStale(key, c) {
   return !content.includes(plain);
 }
 
-const [cmd, ...argv] = process.argv.slice(2);
-const { flags, rest } = parseFlags(argv);
+const parsedArgs = parseFlags(process.argv.slice(2));
+const { flags } = parsedArgs;
+const [cmd, ...rest] = parsedArgs.rest;
+if (flags.root && flags.store) die("usage: --root と --store は同時に指定できません");
 
 // `ai-review open <file>` — or just `ai-review <file>` — starts the browser
 // review server (same UI as the VS Code extension, no build needed).
@@ -101,17 +121,31 @@ const bareFile = cmd && cmd !== "open" && !["list", "json", "pending", "prompt",
 // Root discovery: file-taking commands walk up from the FILE's directory (so
 // the CLI works from any cwd); commands without a file walk up from the cwd.
 const fileRef = bareFile ? resolve(bareFile) : rest[0] && existsSync(resolve(rest[0])) ? resolve(rest[0]) : null;
-const root = fileRef ? findRoot(dirname(fileRef)) : findRoot();
-const storePath = storePathFor(root);
-const readStore = () => readStoreSync(root);
-const writeStore = (store) => writeStoreSync(root, store);
+const explicitStorePath = flags.store ? resolve(flags.store) : null;
+const root = explicitStorePath
+  ? rootForStorePath(explicitStorePath)
+  : flags.root
+    ? resolve(flags.root)
+    : fileRef
+      ? findRoot(dirname(fileRef))
+      : findRoot();
+const storePath = explicitStorePath ?? storePathFor(root);
+const readStore = () => readStoreSync(root, storePath);
+const writeStore = (store) => writeStoreSync(root, store, storePath);
 const keyFor = (file) => keyForIn(root, file);
 
 if (cmd === "open" || bareFile) {
   const file = bareFile ?? rest[0];
   if (!file) die("usage: ai-review open <file>");
   const { serve } = await import("./serve.mjs");
-  await serve({ file, port: flags.port ?? 4900, open: !flags.noOpen, keepAlive: !!flags.keepAlive });
+  await serve({
+    file,
+    port: flags.port ?? 4900,
+    open: !flags.noOpen,
+    keepAlive: !!flags.keepAlive,
+    root: flags.root,
+    store: flags.store,
+  });
 } else {
   runCommand();
 }
@@ -176,6 +210,8 @@ switch (cmd) {
       break;
     }
     const parts = [
+      formatCommonPrompt(key),
+      "",
       `以下は \`${key}\` のレビューコメントです（${list.length}件）。各コメントに従ってファイルを修正してください。`,
       "",
     ];
@@ -259,17 +295,21 @@ switch (cmd) {
   default:
     console.log(`ai-review — AI Review Comments のコメントストアを読み書きするCLI
 
-  ai-review open <file> [--port N] [--no-open] [--keep-alive]
+  ai-review [--store PATH | --root DIR] open <file> [--port N] [--no-open] [--keep-alive]
                                           ブラウザでレビュー（VS Code不要・ビルド不要）
                                           ※ ai-review <file> だけでも開けます
-  ai-review list    [file]                コメント一覧
-  ai-review json    [file]                JSONで出力（エージェント向け）
-  ai-review pending [file]                未対応コメントのみJSON（stale=ファイル変更で位置ズレの可能性）
-  ai-review prompt  <file>                未対応コメントをAIプロンプト形式で出力
-  ai-review add     <file> --line N [--end M] --body "..." [--author ai] [--reply-to ID]
-  ai-review resolve <file> <id> [--note "対応内容"]   対応済みにする
-  ai-review remove  <file> <id>           削除
-  ai-review clear   <file>                全削除
+  ai-review [--store PATH | --root DIR] list    [file]      コメント一覧
+  ai-review [--store PATH | --root DIR] json    [file]      JSONで出力（エージェント向け）
+  ai-review [--store PATH | --root DIR] pending [file]      未対応コメントのみJSON（stale=ファイル変更で位置ズレの可能性）
+  ai-review [--store PATH | --root DIR] prompt  <file>      未対応コメントをAIプロンプト形式で出力
+  ai-review [--store PATH | --root DIR] add     <file> --line N [--end M] --body "..." [--author ai] [--reply-to ID]
+  ai-review [--store PATH | --root DIR] resolve <file> <id> [--note "対応内容"]   対応済みにする
+  ai-review [--store PATH | --root DIR] remove  <file> <id> 削除
+  ai-review [--store PATH | --root DIR] clear   <file>      全削除
+
+root/store:
+  --store PATH   使用する comments.json を直接指定（ネストしたGitルート対策に推奨）
+  --root DIR     <DIR>/.ai-review/comments.json を使用
 
 store: ${storePath}`);
 }

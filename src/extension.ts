@@ -162,6 +162,10 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       vscode.window.showInformationMessage("AIプロンプトをコピーしました。");
     } else if (msg.type === "copy-text") {
       await vscode.env.clipboard.writeText(msg.text);
+    } else if (msg.type === "open-external") {
+      const uri = vscode.Uri.parse(msg.url);
+      if (isAllowedExternalUri(uri)) await vscode.env.openExternal(uri);
+      else vscode.window.showWarningMessage("このリンク種別は開けません。");
     } else if (msg.type === "reveal" && typeof msg.line === "number") {
       const doc = await vscode.workspace.openTextDocument(fileUri);
       const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
@@ -191,6 +195,10 @@ async function openReview(context: vscode.ExtensionContext, fileUri: vscode.Uri)
       }
     }
   });
+}
+
+function isAllowedExternalUri(uri: vscode.Uri): boolean {
+  return ["http", "https", "mailto", "file", "tel"].includes(uri.scheme.toLowerCase());
 }
 
 async function readCurrentText(fileUri: vscode.Uri): Promise<string> {
@@ -323,6 +331,7 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
       reload: () => vscode.postMessage({ type: "reload" }),
       close: () => vscode.postMessage({ type: "close" }),
       copyText: (text) => vscode.postMessage({ type: "copy-text", text }),
+      openExternal: (url) => vscode.postMessage({ type: "open-external", url }),
       loadComments: () => requestHost("load-comments"),
       saveComments: (comments) => requestHost("save-comments", { comments }),
     };

@@ -23,6 +23,20 @@ function createMarkdown(plantumlSvgs = new Map()) {
     }
   });
 
+  markdown.core.ruler.push("ai_review_heading_ids", (state) => {
+    const seen = new Map();
+    for (let i = 0; i < state.tokens.length; i++) {
+      const token = state.tokens[i];
+      if (token.type !== "heading_open" || token.attrGet("id")) continue;
+      const inline = state.tokens[i + 1];
+      const text = inline?.type === "inline" ? inline.content : "";
+      const slug = slugifyHeading(text) || `heading-${token.map?.[0] ?? i}`;
+      const count = seen.get(slug) || 0;
+      seen.set(slug, count + 1);
+      token.attrSet("id", count ? `${slug}-${count}` : slug);
+    }
+  });
+
   markdown.renderer.rules.fence = (tokens, idx, options) => {
     const token = tokens[idx];
     const info = token.info ? token.info.trim() : "";
@@ -77,6 +91,16 @@ function escapeAttr(s) {
 function sourceLineAttr(token) {
   const line = token.attrGet("data-md-line");
   return line ? ` data-md-line="${escapeAttr(line)}"` : "";
+}
+
+function slugifyHeading(text) {
+  return String(text)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 export function renderInline(s) {

@@ -96,6 +96,7 @@ export function makeRenderAdapter({ state, startComposer }) {
     const d = doc();
     d.addEventListener("mousemove", onHover, true);
     d.addEventListener("mouseleave", hideHover, true);
+    d.addEventListener("click", onLinkClick, true);
     d.addEventListener("click", onClick, true);
     d.addEventListener("mouseup", onMouseUp, true);
     d.addEventListener("keydown", onFrameKeyDown, true);
@@ -123,6 +124,123 @@ export function makeRenderAdapter({ state, startComposer }) {
   }
   function hideHover() {
     if (hoverBox) hoverBox.style.display = "none";
+  }
+
+  // ---- link navigation -----------------------------------------------------
+  function onLinkClick(e) {
+    if (mode === "element") return;
+    const link = e.target?.closest?.("a[href]");
+    if (!link) return;
+    const href = (link.getAttribute("href") || "").trim();
+    if (!href) return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    hideCopyMenu();
+
+    if (href.toLowerCase().startsWith("javascript:")) return;
+    if (isInPageAnchor(href)) {
+      followInPageAnchor(href);
+      return;
+    }
+
+    const url = resolveLinkUrl(href);
+    if (!url) return;
+    if (!isAllowedExternalUrl(url)) return;
+    const opened = window.aiReviewHost?.openExternal
+      ? window.aiReviewHost.openExternal(url)
+      : window.open(url, "_blank", "noopener");
+    if (opened?.catch) opened.catch((error) => console.error("Failed to open link", error));
+  }
+
+  function isInPageAnchor(href) {
+    if (href.startsWith("#")) return true;
+    try {
+      const target = new URL(href, sourceFileUrl()).href;
+      return Boolean(new URL(target).hash) && stripHash(target) === stripHash(sourceFileUrl());
+    } catch {
+      return false;
+    }
+  }
+
+  function followInPageAnchor(href) {
+    let hash = href.startsWith("#") ? href : "";
+    if (!hash) {
+      try {
+        hash = new URL(href, sourceFileUrl()).hash;
+      } catch {
+        hash = "";
+      }
+    }
+    if (!hash || hash === "#") {
+      win().scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(relocate, 350);
+      return;
+    }
+    const id = decodeHash(hash.slice(1));
+    const target = doc().getElementById(id) || elementByName(id);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(relocate, 350);
+  }
+
+  function decodeHash(hash) {
+    try {
+      return decodeURIComponent(hash);
+    } catch {
+      return hash;
+    }
+  }
+
+  function elementByName(name) {
+    try {
+      return doc().querySelector(`[name="${cssString(name)}"]`);
+    } catch {
+      return null;
+    }
+  }
+
+  function cssString(value) {
+    return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  function resolveLinkUrl(href) {
+    try {
+      const base = doc().querySelector("base[href]")?.href || sourceFileUrl();
+      return new URL(href, base).href;
+    } catch {
+      return "";
+    }
+  }
+
+  function isAllowedExternalUrl(url) {
+    try {
+      return ["http:", "https:", "mailto:", "file:", "tel:"].includes(new URL(url).protocol);
+    } catch {
+      return false;
+    }
+  }
+
+  function stripHash(url) {
+    const u = new URL(url);
+    u.hash = "";
+    return u.href;
+  }
+
+  function sourceFileUrl() {
+    const filePath = String(state.meta.path || "");
+    if (!filePath) return win().location.href;
+    let normalized = filePath.replace(/\\/g, "/");
+    if (/^[A-Za-z]:\//.test(normalized)) normalized = `/${normalized}`;
+    const encoded = normalized
+      .split("/")
+      .map((segment, index) => {
+        if (index === 0 && segment === "") return "";
+        if (index === 1 && /^[A-Za-z]:$/.test(segment)) return segment;
+        return encodeURIComponent(segment);
+      })
+      .join("/");
+    return `file://${encoded}`;
   }
 
   // ---- selection → comment ------------------------------------------------

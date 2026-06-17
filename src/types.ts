@@ -59,6 +59,7 @@ export interface BootData {
 export type WebviewMessage =
   | { type: "copy"; text: string }
   | { type: "copy-text"; text: string }
+  | { type: "open-external"; url: string }
   | { type: "reveal"; line: number }
   | { type: "close" }
   | { type: "reload" }

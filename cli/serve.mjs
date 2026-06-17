@@ -151,6 +151,28 @@ export async function serve({ file, port = 4900, open = true, keepAlive = false,
       res.writeHead(200, headers("text/plain; charset=utf-8"));
       return res.end(text);
     }
+    if (pathname === "/__open-external") {
+      if (req.method !== "POST") {
+        res.writeHead(405, headers("text/plain; charset=utf-8"));
+        return res.end("Method Not Allowed");
+      }
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+          if (typeof body.url !== "string" || !body.url) throw new Error("url is required");
+          if (!isAllowedExternalUrl(body.url)) throw new Error("unsupported link scheme");
+          openBrowser(body.url);
+          res.writeHead(200, headers(MIME[".json"]));
+          res.end(JSON.stringify({ ok: true }));
+        } catch (error) {
+          res.writeHead(400, headers(MIME[".json"]));
+          res.end(JSON.stringify({ ok: false, error: error.message || String(error) }));
+        }
+      });
+      return;
+    }
     if (pathname === "/__comments") {
       if (req.method === "GET") {
         res.writeHead(200, headers(MIME[".json"]));
@@ -262,6 +284,14 @@ function openBrowser(url) {
   child.unref();
 }
 
+function isAllowedExternalUrl(url) {
+  try {
+    return ["http:", "https:", "mailto:", "file:", "tel:"].includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
 // The same DOM skeleton the extension's webview uses, plus a small browser
 // bridge: reload requests fresh BootData; tab close notifies /__bye.
 // Preview HTML is regenerated on reload; comments persist via .ai-review only.
@@ -352,6 +382,15 @@ function pageHtml(boot) {
         window.__AI_REVIEW_BOOT__ = BOOT;
         window.__PREVIEW_HTML__ = BOOT.previewHtml || "";
         window.dispatchEvent(new CustomEvent("ai-review:reload", { detail: BOOT }));
+      },
+      openExternal: async (url) => {
+        const res = await fetch("/__open-external", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "リンクを開けませんでした");
       },
       loadComments: async () => {
         const data = await fetch("/__comments?t=" + Date.now(), { cache: "no-store" }).then((r) => r.json());

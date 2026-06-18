@@ -1,7 +1,7 @@
 // Shared types across the extension host and (informally) the webview UI.
 
 /** How a file is presented in the preview pane. "none" = source-only. */
-export type PreviewKind = "html" | "markdown" | "none";
+export type PreviewKind = "html" | "markdown" | "plantuml" | "mermaid" | "none";
 
 export type ViewMode = "preview" | "source";
 

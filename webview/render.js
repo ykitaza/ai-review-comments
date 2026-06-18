@@ -8,7 +8,13 @@ export function makeRenderAdapter({ state, startComposer }) {
   const frameWrap = document.getElementById("frame-wrap");
   let iframe, hoverBox, markers, copyMenu;
   let mode = "element"; // element | text | off
-  let pumlLines = null; // .puml source lines (for plantuml label→line mapping)
+  let diagramLines = null; // diagram source lines (label→line mapping for puml/mmd)
+  let messageHandler = null;
+
+  // PlantUML and Mermaid both render to SVG whose element IDs are unstable, so
+  // comments are located by the clicked label's text rather than a CSS selector.
+  const isLabelDiagram = () =>
+    state.meta.previewKind === "plantuml" || state.meta.previewKind === "mermaid";
 
   function doc() {
     return iframe.contentDocument || iframe.contentWindow.document;
@@ -45,15 +51,21 @@ export function makeRenderAdapter({ state, startComposer }) {
     frameWrap.appendChild(copyMenu);
 
     setupToolbar();
-    // for PlantUML, load the source lines so clicks can map labels → line refs
-    if (state.meta.previewKind === "plantuml" && pumlLines === null) {
+    // for diagrams, load the source lines so clicks can map labels → line refs
+    if (isLabelDiagram() && diagramLines === null) {
       try {
         const text = await (await fetch("/__source")).text();
-        pumlLines = text.replace(/\r\n?/g, "\n").split("\n");
+        diagramLines = text.replace(/\r\n?/g, "\n").split("\n");
       } catch {
-        pumlLines = [];
+        diagramLines = [];
       }
     }
+    // Mermaid renders client-side after load; re-place pins when it signals done.
+    if (messageHandler) window.removeEventListener("message", messageHandler);
+    messageHandler = (e) => {
+      if (e.data === "ai-review:diagram-rendered") relocate();
+    };
+    window.addEventListener("message", messageHandler);
     await new Promise((res) => {
       iframe.addEventListener("load", () => {
         attachFrameListeners();
@@ -250,7 +262,7 @@ export function makeRenderAdapter({ state, startComposer }) {
     e.stopPropagation();
     const el = e.target;
     if (!el) return;
-    if (state.meta.previewKind === "plantuml") return onPlantumlClick(el, e);
+    if (isLabelDiagram()) return onDiagramClick(el, e);
     startComposer(
       {
         kind: "element",
@@ -264,16 +276,16 @@ export function makeRenderAdapter({ state, startComposer }) {
     );
   }
 
-  // PlantUML: SVG element IDs are unstable, so locate by the clicked label's
-  // text and map it back to the first matching line in the .puml source.
-  function onPlantumlClick(el, e) {
+  // Locate the clicked diagram label by its text and map it back to the first
+  // matching line in the .puml/.mmd source (SVG element IDs are unstable).
+  function onDiagramClick(el, e) {
     // climb to a node that carries readable text (the SVG <text> or its group)
     let label = (el.textContent || "").trim().replace(/\s+/g, " ");
     if (!label && el.closest) {
       const g = el.closest("g");
       if (g) label = (g.textContent || "").trim().replace(/\s+/g, " ");
     }
-    const srcLine = label ? findPumlLine(label) : null;
+    const srcLine = label ? findDiagramLine(label) : null;
     startComposer(
       {
         kind: "element",
@@ -288,11 +300,11 @@ export function makeRenderAdapter({ state, startComposer }) {
   }
 
   // first source line whose text contains the label (longest-token match)
-  function findPumlLine(label) {
-    if (!pumlLines) return null;
+  function findDiagramLine(label) {
+    if (!diagramLines) return null;
     const needle = label.split(/\s+/).sort((a, b) => b.length - a.length)[0] || label;
-    for (let i = 0; i < pumlLines.length; i++) {
-      if (pumlLines[i].includes(needle)) return i + 1;
+    for (let i = 0; i < diagramLines.length; i++) {
+      if (diagramLines[i].includes(needle)) return i + 1;
     }
     return null;
   }
@@ -424,10 +436,10 @@ export function makeRenderAdapter({ state, startComposer }) {
   }
 
   function resolve(c) {
-    // PlantUML comments aren't located by CSS selector (unstable IDs) but by
-    // the clicked label's text — re-find the matching SVG <text> element so
-    // the pin reappears after the diagram is re-rendered (e.g. view toggle).
-    if (state.meta.previewKind === "plantuml") {
+    // Diagram (PlantUML/Mermaid) comments aren't located by CSS selector
+    // (unstable IDs) but by the clicked label's text — re-find the matching SVG
+    // <text> element so the pin reappears after the diagram is re-rendered.
+    if (isLabelDiagram()) {
       const label = (c.quote || "").trim();
       if (!label) return null;
       const texts = doc().querySelectorAll("svg text");

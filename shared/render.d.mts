@@ -5,6 +5,6 @@ export function renderInline(s: string): string;
 export function renderMarkdownBody(md: string, options?: { baseDir?: string }): Promise<string>;
 export function renderMarkdownDoc(md: string, options?: { baseDir?: string }): Promise<string>;
 export function injectLineNumbers(html: string): string;
-export function previewKindFor(filePath: string): "html" | "markdown" | "none";
+export function previewKindFor(filePath: string): "html" | "markdown" | "plantuml" | "mermaid" | "none";
 export function langFor(filePath: string): string;
 export function renderPreview(filePath: string, source: string): Promise<string | null>;

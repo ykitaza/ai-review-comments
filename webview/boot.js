@@ -11,7 +11,7 @@ initSettings();
 
 init((ctx) => {
   const { state } = ctx;
-  const previewKind = state.meta.previewKind; // html | markdown | none
+  const previewKind = state.meta.previewKind; // html | markdown | plantuml | none
   const hasPreview = previewKind !== "none";
 
   const toggle = document.getElementById("view-toggle");

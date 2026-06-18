@@ -212,6 +212,10 @@ const PREVIEW_KIND_BY_EXT = {
   ".htm": "html",
   ".md": "markdown",
   ".markdown": "markdown",
+  ".puml": "plantuml",
+  ".plantuml": "plantuml",
+  ".mmd": "mermaid",
+  ".mermaid": "mermaid",
 };
 const LANG_BY_EXT = {
   ".json": "json", ".yaml": "yaml", ".yml": "yaml", ".xml": "xml",
@@ -239,7 +243,69 @@ export async function renderPreview(filePath, source) {
   const kind = previewKindFor(filePath);
   if (kind === "markdown") return await renderMarkdownDoc(source, { baseDir: dirname(filePath) });
   if (kind === "html") return injectLineNumbers(source);
+  if (kind === "plantuml") return renderPlantumlShell(await renderPlantumlSvg(source));
+  if (kind === "mermaid") return renderMermaidShell(source);
   return null;
+}
+
+// Wrap raw Mermaid source as a standalone HTML document for the preview iframe.
+// Unlike PlantUML (rendered server-side), Mermaid renders client-side from the
+// CDN, then signals the parent so pins can be (re)placed once the SVG exists.
+function renderMermaidShell(source) {
+  const src = String(source).replace(/\r\n?/g, "\n");
+  return `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; padding: 24px; background:#fff; text-align:center;
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  .mermaid svg { max-width: 100%; height: auto; }
+  .mermaid-error { display:inline-block; text-align:left; background:#fff5f5;
+    border:1px solid #f3c0c0; color:#b00; border-radius:8px; padding:10px 14px;
+    white-space:pre-wrap; font-family:ui-monospace,monospace; font-size:12px; }
+</style></head>
+<body>
+<div class="mermaid" data-mermaid-src="${escapeAttr(src)}">${escapeHtml(src)}</div>
+<script type="module">
+  try {
+    const mermaid = (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;
+    mermaid.initialize({ startOnLoad: false, securityLevel: "loose" });
+    const el = document.querySelector(".mermaid");
+    const src = el.getAttribute("data-mermaid-src") || el.textContent;
+    try {
+      const { svg } = await mermaid.render("mmd-0", src);
+      el.innerHTML = svg;
+      el.setAttribute("data-rendered", "1");
+    } catch (e) {
+      el.innerHTML = '<div class="mermaid-error">Mermaid 描画エラー: ' +
+        String(e && e.message || e) + '</div>';
+    }
+  } catch (e) {
+    // mermaid library failed to load (offline?) — leave raw text as-is.
+  }
+  parent.postMessage("ai-review:diagram-rendered", "*");
+</script>
+</body></html>`;
+}
+
+// Wrap a rendered PlantUML SVG as a standalone HTML document for the preview
+// iframe. The webview locates comments by the clicked SVG <text> label, so no
+// per-element line numbers are injected here.
+function renderPlantumlShell(svg) {
+  return `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; padding: 24px; background:#fff; text-align:center;
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  svg { max-width: 100%; height: auto; }
+  .plantuml-error { display:inline-block; text-align:left; background:#fff5f5;
+    border:1px solid #f3c0c0; color:#b00; border-radius:8px; padding:10px 14px;
+    white-space:pre-wrap; font-family:ui-monospace,monospace; font-size:12px; }
+</style></head>
+<body>
+${svg}
+</body></html>`;
 }
 
 export async function renderMarkdownDoc(md, options = {}) {

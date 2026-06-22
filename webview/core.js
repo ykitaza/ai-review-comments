@@ -35,6 +35,8 @@ let findBar = null;
 let findInput = null;
 let findStatus = null;
 let lastFindQuery = "";
+// display numbers: roots are "1","2"…; replies are "1.1","1.2"… (id → label)
+let commentNumbers = new Map();
 let findComposing = false;
 const commentSectionOpen = { open: true, closed: false };
 
@@ -364,7 +366,7 @@ export function renderComments() {
   els.count.textContent = resolvedCount ? `${unresolvedCount}/${state.comments.length}` : String(unresolvedCount);
   els.copy.disabled = unresolvedCount === 0;
   els.clear.disabled = state.comments.length === 0;
-  els.hint.style.display = state.comments.length ? "none" : "block";
+  els.hint.style.display = state.comments.length ? "none" : "flex";
 
   els.comments.innerHTML = "";
   if (!state.comments.length) return;
@@ -373,25 +375,35 @@ export function renderComments() {
   const unresolvedRoots = roots.filter((c) => threadHasUnresolved(c, replies));
   const resolvedRoots = roots.filter((c) => !threadHasUnresolved(c, replies));
 
+  // number roots in creation order; replies as "<root>.<n>" so the visible
+  // sequence never appears to skip a number when a reply sits between roots.
+  commentNumbers = new Map();
+  roots.forEach((root, ri) => {
+    commentNumbers.set(root.id, String(ri + 1));
+    (replies.get(root.id) || []).forEach((reply, i) => {
+      commentNumbers.set(reply.id, `${ri + 1}.${i + 1}`);
+    });
+  });
+
   appendCommentSection({
     key: "open",
-    title: "Open",
+    title: "未対応",
     count: unresolvedCount,
     roots: unresolvedRoots,
     replies,
     open: commentSectionOpen.open,
-    emptyText: "Open コメントはありません。",
+    emptyText: "未対応のコメントはありません。",
   });
 
   if (resolvedCount) {
     appendCommentSection({
       key: "closed",
-      title: "Closed",
+      title: "対応済み",
       count: resolvedCount,
       roots: resolvedRoots,
       replies,
       open: commentSectionOpen.closed,
-      emptyText: "Closed コメントはありません。",
+      emptyText: "対応済みのコメントはありません。",
     });
   }
 }
@@ -446,67 +458,65 @@ function threadHasUnresolved(c, replies) {
   return !c.resolved || (replies.get(c.id) || []).some((reply) => !reply.resolved);
 }
 
+// monochrome 16px stroke icons (currentColor) — replaces OS-dependent emoji so
+// every action button shares one visual weight.
+const ICONS = {
+  copy: '<rect x="5.5" y="5.5" width="9" height="9" rx="1.6"/><path d="M3.5 10.5V4A1.5 1.5 0 0 1 5 2.5h6"/>',
+  edit: '<path d="M11.5 3.5l2 2L6 13l-2.6.6L4 11z"/>',
+  reply: '<path d="M8 5.5L4 9l4 3.5"/><path d="M4 9h6.5a3 3 0 0 1 3 3v1.5"/>',
+  resolve: '<path d="M3.5 8.5l3 3 6.5-7"/>',
+  reopen: '<path d="M13 8a5 5 0 1 1-1.5-3.5"/><path d="M13 3v2.5h-2.5"/>',
+  trash: '<path d="M3.5 5h11"/><path d="M6.5 5V3.5h5V5"/><path d="M5 5l.8 9h6.4L13 5"/>',
+};
+function svgIcon(name) {
+  return `<svg viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+}
+function actionBtn(name, title, cls, onClick) {
+  const btn = document.createElement("button");
+  btn.className = cls;
+  btn.type = "button";
+  btn.innerHTML = svgIcon(name);
+  btn.title = title;
+  btn.setAttribute("aria-label", title);
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onClick(btn);
+  });
+  return btn;
+}
+
 function commentItem(c) {
   const i = state.comments.indexOf(c);
   const li = document.createElement("li");
   li.className = "comment" + (c.resolved ? " resolved" : "") + (c.replyTo ? " reply" : "");
   li.dataset.id = c.id;
 
+  const num = commentNumbers.get(c.id) || String(i + 1);
   const head = document.createElement("div");
   head.className = "comment-head";
   head.innerHTML = `
-    <span class="comment-num">${i + 1}</span>
+    <span class="comment-num${c.replyTo ? " reply-num" : ""}">${num}</span>
     <span class="comment-kind">${kindLabel(c)}</span>
     ${c.author === "ai" ? '<span class="comment-author-ai" title="AIが追加したコメント">AI</span>' : ""}
-    ${c.replyTo ? `<span class="comment-reply" title="#${c.replyTo} への返信">↪ #${c.replyTo}</span>` : ""}
-    ${c.resolved ? '<span class="comment-resolved" title="対応済み">✓ 対応済み</span>' : ""}
+    ${c.resolved ? '<span class="comment-resolved" title="対応済み">対応済み</span>' : ""}
   `;
-  const copyOne = document.createElement("button");
-  copyOne.className = "comment-copy";
-  copyOne.textContent = "📋";
-  copyOne.title = "このコメントだけAIプロンプトとしてコピー";
-  copyOne.addEventListener("click", (e) => {
-    e.stopPropagation();
+  const actions = document.createElement("div");
+  actions.className = "comment-actions";
+  const copyOne = actionBtn("copy", "このコメントだけAIプロンプトとしてコピー", "comment-copy", (btn) => {
     copyText(buildPrompt([c]));
-    flashToast(copyOne);
+    flashToast(btn);
   });
-  const edit = document.createElement("button");
-  edit.className = "comment-copy";
-  edit.textContent = "✎";
-  edit.title = "編集";
-  edit.addEventListener("click", (e) => {
-    e.stopPropagation();
-    openEditComposer(c);
-  });
-  const reply = document.createElement("button");
-  reply.className = "comment-copy";
-  reply.textContent = "↩";
-  reply.title = "返信";
-  reply.addEventListener("click", (e) => {
-    e.stopPropagation();
-    openReplyComposer(c);
-  });
-  const resolve = document.createElement("button");
-  resolve.className = "comment-resolve";
-  resolve.textContent = c.resolved ? "再開" : (c.replyTo ? "解決" : "スレッド解決");
-  resolve.title = c.resolved ? "未対応に戻す" : "対応済みにする";
-  resolve.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setCommentResolved(c.id, !c.resolved);
-  });
-  const del = document.createElement("button");
-  del.className = "comment-del";
-  del.textContent = "🗑";
-  del.title = "削除";
-  del.addEventListener("click", (e) => {
-    e.stopPropagation();
-    deleteComment(c.id);
-  });
-  head.appendChild(copyOne);
-  head.appendChild(reply);
-  head.appendChild(resolve);
-  head.appendChild(edit);
-  head.appendChild(del);
+  const reply = actionBtn("reply", "返信", "comment-copy", () => openReplyComposer(c));
+  const resolve = actionBtn(
+    c.resolved ? "reopen" : "resolve",
+    c.resolved ? "未対応に戻す" : (c.replyTo ? "解決にする" : "スレッドを解決にする"),
+    "comment-resolve",
+    () => setCommentResolved(c.id, !c.resolved)
+  );
+  const edit = actionBtn("edit", "編集", "comment-copy", () => openEditComposer(c));
+  const del = actionBtn("trash", "削除", "comment-del", () => deleteComment(c.id));
+  actions.append(resolve, reply, edit, copyOne, del);
+  head.appendChild(actions);
   li.appendChild(head);
 
   if (c.quote) {
@@ -515,10 +525,14 @@ function commentItem(c) {
     q.textContent = `“${truncate(c.quote, 160)}”`;
     li.appendChild(q);
   }
-  const sel = document.createElement("div");
-  sel.className = "comment-sel";
-  sel.textContent = c.selector;
-  li.appendChild(sel);
+  // the line-ref (L11) already shows in the head for line comments, so only
+  // surface the selector bar when it carries new info (a CSS path / 図要素).
+  if (c.kind !== "lines" && c.selector) {
+    const sel = document.createElement("div");
+    sel.className = "comment-sel";
+    sel.textContent = c.selector;
+    li.appendChild(sel);
+  }
 
   const body = document.createElement("div");
   body.className = "comment-body";

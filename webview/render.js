@@ -415,6 +415,7 @@ export function makeRenderAdapter({ state, startComposer }) {
     const frTop = fr.top - base.top;
     const frLeft = fr.left - base.left;
     state.comments.forEach((c, i) => {
+      if (c.resolved) return; // resolved comments drop their marker entirely
       if (!c.anchor || !c.selector) return;
       const el = resolve(c);
       if (!el) return;

@@ -245,16 +245,19 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
         <span id="file-label">…</span>
         <span id="extension-version" class="version-badge" title="AI Review Comments version">…</span>
         <div id="view-toggle" class="seg" hidden>
-          <button id="view-preview" class="seg-btn" title="レンダリング結果を表示">👁 プレビュー</button>
-          <button id="view-source" class="seg-btn" title="生のソースを行番号付きで表示">&lt;&gt; ソース</button>
+          <button id="view-preview" class="seg-btn" title="レンダリング結果を表示">プレビュー</button>
+          <button id="view-source" class="seg-btn" title="生のソースを行番号付きで表示">ソース</button>
         </div>
         <span class="spacer"></span>
-        <button id="mode-element" class="mode-btn" title="要素をクリックしてコメント">⬚ 要素</button>
-        <button id="mode-text" class="mode-btn active" title="テキストをドラッグ選択してコメント">✎ テキスト</button>
-        <button id="mode-off" class="mode-btn" title="コメント操作を無効化し、リンク・選択・ショートカットなど通常のページ操作を優先">✋ 操作</button>
-        <button id="reload-view" class="icon-btn" title="プレビューを再読み込み（リンクで遷移してしまったとき等）">⟳</button>
-        <button id="open-settings" class="icon-btn" title="設定（プロンプトテンプレート）">⚙</button>
-        <button id="toggle-panel" class="icon-btn" title="コメントパネルを開閉">⟩</button>
+        <div class="toolbar-group" role="group" aria-label="コメントモード">
+          <button id="mode-element" class="mode-btn" title="要素をクリックしてコメント">要素</button>
+          <button id="mode-text" class="mode-btn active" title="テキストをドラッグ選択してコメント">テキスト</button>
+          <button id="mode-off" class="mode-btn" title="コメント操作を無効化し、リンク・選択・ショートカットなど通常のページ操作を優先">操作</button>
+        </div>
+        <span class="toolbar-sep"></span>
+        <button id="reload-view" class="icon-btn" title="プレビューを再読み込み（リンクで遷移してしまったとき等）" aria-label="再読み込み"><svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 9a5.5 5.5 0 1 1-1.6-3.9"/><path d="M14.4 3.4V7H10.8"/></svg></button>
+        <button id="open-settings" class="icon-btn" title="設定（プロンプトテンプレート）" aria-label="設定"><svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.3"/><path d="M9 1.6v2.2M9 14.2v2.2M16.4 9h-2.2M3.8 9H1.6M14.2 3.8l-1.55 1.55M5.35 12.65 3.8 14.2M14.2 14.2l-1.55-1.55M5.35 5.35 3.8 3.8"/></svg></button>
+        <button id="toggle-panel" class="icon-btn" title="コメントパネルを開閉" aria-label="コメントパネルを開閉"><svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l5 5-5 5"/></svg></button>
       </div>
       <div id="frame-wrap"></div>
     </main>
@@ -263,22 +266,22 @@ function buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview, bo
       <header>
         <h1>コメント</h1><span id="count" class="badge">0</span>
         <span class="spacer"></span>
-        <button id="collapse-panel" class="icon-btn" title="パネルを隠す">⟩</button>
+        <button id="collapse-panel" class="icon-btn" title="パネルを隠す" aria-label="パネルを隠す"><svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l5 5-5 5"/></svg></button>
       </header>
-      <div id="hint" class="hint">左の<strong>要素や行をクリック</strong>、または<strong>範囲をドラッグ</strong>するとコメントを追加できます。</div>
+      <div id="hint" class="hint"><span>左の<strong>要素や行をクリック</strong>、または<strong>範囲をドラッグ</strong>すると<br>コメントを追加できます。</span></div>
       <ul id="comments"></ul>
       <footer>
-        <button id="copy" class="primary" disabled>📋 AIプロンプトをコピー</button>
+        <button id="copy" class="primary" disabled>AIプロンプトをコピー</button>
         <button id="clear" class="ghost" disabled>すべて削除</button>
         <div id="copied-toast" class="toast">コピーしました</div>
       </footer>
     </aside>
   </div>
 
-  <button id="show-panel" class="show-panel hidden">⟨ コメント</button>
+  <button id="show-panel" class="show-panel hidden"><svg viewBox="0 0 18 18" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4 6 9l5 5"/></svg> コメント</button>
 
   <div id="settings" class="drawer hidden">
-    <div class="drawer-head"><h2>設定 — AIプロンプトテンプレート</h2><button id="settings-close" class="icon-btn" title="閉じる">✕</button></div>
+    <div class="drawer-head"><h2>設定 — AIプロンプトテンプレート</h2><button id="settings-close" class="icon-btn" title="閉じる" aria-label="閉じる"><svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l8 8M13 5l-8 8"/></svg></button></div>
     <div class="drawer-body">
       <label class="field-label">共通プロンプト</label>
       <p class="field-help">すべてのAIプロンプトの先頭に入る共通コンテキストです。作業ルートやコメントストアなど、個別指示から独立した情報を管理します。</p>
